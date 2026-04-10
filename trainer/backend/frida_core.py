@@ -24,6 +24,10 @@ from hash_function import KNOWN_CHEATS, carma2_hash, HIDDEN_CHEAT_HASH
 GAME_PROC_NAME = 'carma2_hw.exe'
 GAME_EXE_NAME = 'CARMA2_HW.EXE'
 
+# Known good Steam build — all hardcoded VAs are for this exact binary
+KNOWN_EXE_SIZE = 2680320
+KNOWN_EXE_MD5 = '66a9c49483ff4415b518bb7df01385bd'
+
 AGENT_JS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent.js')
 
 
@@ -217,6 +221,29 @@ class Carma2Backend:
         self.game_exe = exe_path
         self.game_dir = os.path.dirname(exe_path)
 
+    def verify_exe(self) -> bool:
+        """Check that the game EXE matches the known Steam build.
+        Returns True if OK, False if mismatch (hooks will crash)."""
+        if not self.game_exe or not os.path.isfile(self.game_exe):
+            return False
+        size = os.path.getsize(self.game_exe)
+        if size != KNOWN_EXE_SIZE:
+            self._log(f'*** EXE MISMATCH: size={size} expected={KNOWN_EXE_SIZE} ***')
+            self._log('This binary is a different build — hardcoded addresses will crash the game!')
+            return False
+        # Optional: check MD5 for certainty
+        try:
+            import hashlib
+            with open(self.game_exe, 'rb') as f:
+                md5 = hashlib.md5(f.read()).hexdigest()
+            if md5 != KNOWN_EXE_MD5:
+                self._log(f'*** EXE MISMATCH: md5={md5} expected={KNOWN_EXE_MD5} ***')
+                return False
+        except Exception as e:
+            self._log(f'MD5 check failed: {e} (continuing anyway)')
+        self._log(f'EXE verified: size={size} md5 OK')
+        return True
+
     # ----- attach/spawn -----
 
     def is_attached(self) -> bool:
@@ -235,6 +262,7 @@ class Carma2Backend:
         pid = self.find_running()
         if pid is None:
             return False
+        self.verify_exe()  # warns loudly on mismatch but doesn't block
         self._log(f'attaching to existing process pid={pid}')
         self._attach(pid, resume=False)
         return True
@@ -242,6 +270,7 @@ class Carma2Backend:
     def spawn(self, nocutscene: bool = True) -> int:
         if not self.game_exe or not os.path.isfile(self.game_exe):
             raise FileNotFoundError(f'Game not found: {self.game_exe}')
+        self.verify_exe()  # warns loudly on mismatch but doesn't block
         argv = [self.game_exe]
         if nocutscene:
             argv.append('-NOCUTSCENE')
