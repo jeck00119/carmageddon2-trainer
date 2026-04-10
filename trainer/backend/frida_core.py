@@ -396,6 +396,15 @@ class Carma2Backend:
             self._log(f'snap() failed: {type(e).__name__}: {e}')
             return None
 
+    def window_state(self) -> Optional[dict]:
+        if self.api is None:
+            return None
+        try:
+            return self.api.window_state()
+        except Exception as e:
+            self._log(f'window_state() failed: {type(e).__name__}: {e}')
+            return None
+
     def click_sel(self, sel: int) -> str:
         return self._rpc('click_sel', sel)
 

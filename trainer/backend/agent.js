@@ -294,16 +294,27 @@ if (u32 && !SAFE_MODE) {
     // This runs for every message dispatched to the game window. The hot path
     // is the `default` switch case which is just a return.
     var hookedProcs = {};
+    var _wndprocMsgCount = 0;
+    var _msgNames = {};
+    _msgNames[WM_ACTIVATE] = 'WM_ACTIVATE';
+    _msgNames[WM_ACTIVATEAPP] = 'WM_ACTIVATEAPP';
+    _msgNames[WM_NCACTIVATE] = 'WM_NCACTIVATE';
+    _msgNames[WM_KILLFOCUS] = 'WM_KILLFOCUS';
+    _msgNames[WM_TRAINER_ALTENTER] = 'WM_TRAINER_ALTENTER';
+
     function hookWndProc(addr) {
         var key = addr.toString();
         if (hookedProcs[key]) return;
         hookedProcs[key] = true;
+        send({h: 'log', msg: 'WndProc hooked @ ' + addr});
         try {
             Interceptor.attach(addr, {
                 onEnter: function (args) {
-                    if (gameHwnd.isNull()) gameHwnd = args[0];
+                    if (gameHwnd.isNull()) {
+                        gameHwnd = args[0];
+                        send({h: 'log', msg: 'gameHwnd captured: ' + gameHwnd});
+                    }
                     var msg = args[1].toInt32();
-                    // Hot-path early exit: most messages are uninteresting.
                     if (msg !== WM_TRAINER_ALTENTER &&
                         msg !== WM_ACTIVATEAPP &&
                         msg !== WM_ACTIVATE &&
@@ -312,8 +323,10 @@ if (u32 && !SAFE_MODE) {
 
                     var wp = args[2].toInt32();
                     var swallow = false;
+                    var name = _msgNames[msg] || ('0x' + msg.toString(16));
 
                     if (msg === WM_TRAINER_ALTENTER) {
+                        send({h: 'log', msg: 'WndProc: WM_TRAINER_ALTENTER -> doToggle'});
                         doToggle();
                         swallow = true;
                     } else if (msg === WM_ACTIVATEAPP && wp === 0) {
@@ -327,13 +340,19 @@ if (u32 && !SAFE_MODE) {
                     }
 
                     if (swallow) {
+                        _wndprocMsgCount++;
+                        // Log first 20 swallowed messages, then every 50th
+                        if (_wndprocMsgCount <= 20 || _wndprocMsgCount % 50 === 0) {
+                            send({h: 'log', msg: 'WndProc SWALLOW #' + _wndprocMsgCount +
+                                  ': ' + name + ' wParam=' + wp});
+                        }
                         args[1] = ptr(WM_NULL);
                         args[2] = ptr(0);
                         args[3] = ptr(0);
                     }
                 }
             });
-        } catch (e) { send({h: 'log', msg: 'hookWndProc failed @' + addr + ': ' + e}); }
+        } catch (e) { send({h: 'log', msg: 'hookWndProc FAILED @' + addr + ': ' + e}); }
     }
 
     // Capture the game's WndProc by snooping RegisterClass[Ex]A/W.
@@ -343,6 +362,8 @@ if (u32 && !SAFE_MODE) {
                 onEnter: function (args) {
                     try {
                         var wp = args[0].add(wpOffset).readPointer();
+                        send({h: 'log', msg: name + ': lpfnWndProc=' + wp +
+                              (wp.isNull() ? ' (null, skip)' : ' -> hooking')});
                         if (!wp.isNull()) hookWndProc(wp);
                     } catch (e) { send({h: 'log', msg: name + ' readPointer failed: ' + e}); }
                 }
@@ -600,6 +621,18 @@ rpc.exports = {
             item_index:   rd32(0x7447f0),
         };
     },
+    windowState: function () {
+        var procs = Object.keys(hookedProcs || {});
+        return {
+            gameHwnd: gameHwnd ? gameHwnd.toString() : 'null',
+            postMessageA: postMessageA !== null,
+            hookedWndProcs: procs,
+            nglideKbdProc: nglideKeyboardProc ? nglideKeyboardProc.toString() : 'null',
+            toggleFlag: nglideToggleFlag ? nglideToggleFlag.toString() : 'null',
+            togglePending: nglideTogglePending ? nglideTogglePending.toString() : 'null',
+            swallowedMsgCount: _wndprocMsgCount,
+        };
+    },
     clickSel: function (sel) { return click(sel); },
     fireByHash: function (h1, h2) {
         injectH1 = h1 >>> 0;
@@ -608,10 +641,10 @@ rpc.exports = {
         return 'armed';
     },
     altEnter: function () {
+        send({h: 'log', msg: 'altEnter: hwnd=' + gameHwnd + ' postMsg=' + (postMessageA !== null) +
+              ' flag=' + nglideToggleFlag + ' pending=' + nglideTogglePending});
         if (gameHwnd.isNull() || postMessageA === null) return 'no_hwnd';
         if (nglideToggleFlag.isNull()) return 'no_toggle';
-        // Defer to game's main thread via custom message; the WndProc subclass
-        // picks it up and calls doToggle() from the right thread.
         postMessageA(gameHwnd, WM_TRAINER_ALTENTER, 0, 0);
         return 'posted';
     },
