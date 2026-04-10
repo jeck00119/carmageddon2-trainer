@@ -379,13 +379,27 @@ if (u32 && !SAFE_MODE) {
     captureFromRegister('RegisterClassExW', 8);
 
     // ---- Capture nGlide WH_KEYBOARD hook proc once, extract toggle addrs ----
+    var _hookTypes = {2: 'WH_KEYBOARD', 3: 'WH_GETMESSAGE', 4: 'WH_CALLWNDPROC',
+                      7: 'WH_MOUSE', 13: 'WH_KEYBOARD_LL', 14: 'WH_MOUSE_LL'};
     function hookSetWHE(name) {
         try {
             Interceptor.attach(u32.getExportByName(name), {
                 onEnter: function (args) {
-                    if (args[0].toInt32() !== 2) return;          // WH_KEYBOARD only
+                    var hookType = args[0].toInt32();
+                    var proc = args[1];
+                    var typeName = _hookTypes[hookType] || ('type=' + hookType);
+                    // Find which module the proc belongs to
+                    var modName = '?';
+                    try {
+                        var m = Process.findModuleByAddress(proc);
+                        if (m) modName = m.name;
+                    } catch (e) {}
+                    send({h: 'log', msg: name + '(' + typeName + ', ' + proc +
+                          ') from ' + modName});
+
+                    if (hookType !== 2) return;                   // WH_KEYBOARD only
                     if (!nglideKeyboardProc.isNull()) return;     // first one only
-                    nglideKeyboardProc = args[1];
+                    nglideKeyboardProc = proc;
                     send({h: 'kbd_proc', addr: nglideKeyboardProc.toString()});
                     extractToggle(nglideKeyboardProc);
                 }
@@ -623,6 +637,8 @@ rpc.exports = {
     },
     windowState: function () {
         var procs = Object.keys(hookedProcs || {});
+        var glideMod = null;
+        try { glideMod = Process.findModuleByName('glide2x.dll'); } catch (e) {}
         return {
             gameHwnd: gameHwnd ? gameHwnd.toString() : 'null',
             postMessageA: postMessageA !== null,
@@ -631,6 +647,9 @@ rpc.exports = {
             toggleFlag: nglideToggleFlag ? nglideToggleFlag.toString() : 'null',
             togglePending: nglideTogglePending ? nglideTogglePending.toString() : 'null',
             swallowedMsgCount: _wndprocMsgCount,
+            glide2xLoaded: glideMod !== null,
+            glide2xBase: glideMod ? glideMod.base.toString() : 'null',
+            glide2xSize: glideMod ? glideMod.size : 0,
         };
     },
     clickSel: function (sel) { return click(sel); },
