@@ -42,8 +42,8 @@ class BackendBridge(QObject):
 
     # Emitted when game EXE can't be found — main_window shows a file dialog
     game_not_found = Signal()
-    # Emitted when nGlide is not detected — windowed mode unavailable
-    nglide_missing = Signal()
+    # Emitted when nGlide status changes — UI should refresh windowed controls
+    nglide_changed = Signal(bool)  # True = nGlide present
 
     def __init__(self):
         super().__init__()
@@ -137,7 +137,10 @@ class BackendBridge(QObject):
             return False
         self.backend.set_game_path(path)
         self._settings.setValue('game_exe', path)
+        old_nglide = self.has_nglide
         self.has_nglide = check_nglide(os.path.dirname(path))
+        if self.has_nglide != old_nglide:
+            self.nglide_changed.emit(self.has_nglide)
         self.log.emit(f'Game path: {path}')
         return True
 

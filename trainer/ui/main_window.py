@@ -52,7 +52,7 @@ class MainWindow(QMainWindow):
         self.bridge.attached_changed.connect(self._on_attached_changed)
         self.bridge.op_finished.connect(self._on_op_finished)
         self.bridge.game_not_found.connect(self._on_game_not_found)
-        self.bridge.nglide_missing.connect(self._on_nglide_missing)
+        self.bridge.nglide_changed.connect(self._on_nglide_changed)
 
         # --- Top bar: title + attach controls ---
         top = QWidget()
@@ -170,18 +170,35 @@ class MainWindow(QMainWindow):
 
     def _on_hotkey(self, hk_id: int):
         if hk_id == HOTKEY_ID_ALT_ENTER:
+            if not self.bridge.has_nglide:
+                return  # silently ignore — nGlide not installed
             print('[trainer] hotkey Ctrl+Shift+W -> alt_enter', file=sys.stderr, flush=True)
             self.bridge.alt_enter()
 
     def _attach_clicked(self):
         # Arm the auto-toggle BEFORE spawning so toggle_ready fires it.
         if self.cb_windowed.isChecked() and not self.bridge.has_nglide:
-            self._on_nglide_missing()
+            self._prompt_nglide_download()
             return
         self.bridge.wants_windowed = self.cb_windowed.isChecked()
         self.bridge.attach_or_spawn()
 
-    def _on_nglide_missing(self):
+    def _on_nglide_changed(self, present: bool):
+        """Refresh windowed controls when nGlide status changes."""
+        self.cb_windowed.setEnabled(present)
+        if present:
+            self.cb_windowed.setToolTip(
+                'When enabled, the trainer toggles to windowed mode automatically '
+                'after spawning the game. Requires nGlide.')
+            self.btn_toggle_window.setToolTip(
+                'Toggle between windowed and fullscreen at runtime '
+                '(or use the global Ctrl+Shift+W hotkey).')
+        else:
+            self.cb_windowed.setChecked(False)
+            self.cb_windowed.setToolTip('nGlide not installed — windowed mode unavailable')
+            self.btn_toggle_window.setToolTip('nGlide not installed — windowed mode unavailable')
+
+    def _prompt_nglide_download(self):
         """Prompt user to install nGlide for windowed mode."""
         reply = QMessageBox.question(
             self, 'nGlide Required',
@@ -227,7 +244,7 @@ class MainWindow(QMainWindow):
             self.lbl_state.setStyleSheet('color: #4ec27a; font-weight: 600;')
             self.btn_attach.setEnabled(False)
             self.btn_detach.setEnabled(True)
-            self.btn_toggle_window.setEnabled(True)
+            self.btn_toggle_window.setEnabled(self.bridge.has_nglide)
         else:
             self.lbl_state.setText('●  Detached')
             self.lbl_state.setStyleSheet('color: #e85050; font-weight: 600;')
