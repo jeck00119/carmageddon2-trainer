@@ -35,8 +35,6 @@ Requires Python 3.10+, `frida`, `PySide6`. The game must be the Steam build
 
 For debug logs, run from a terminal — important lifecycle events go to stderr.
 
-**Safe mode** (disables all hooks, only snap/RPC): `py -3 trainer.py --safe`
-
 **Global hotkey:** `Ctrl+Shift+W` toggles nGlide windowed/fullscreen mode at any
 time, regardless of which window has focus.
 
@@ -83,16 +81,16 @@ just writes those addresses directly.
 
 ```
 trainer/
-├── trainer.py             entry point (--safe flag, startup banner)
+├── trainer.py             entry point
 ├── deps/
 │   └── glide2x.dll        bundled nGlide 2.60 (auto-installed)
 ├── backend/
 │   ├── agent.js           Frida script: input release, dinput non-exclusive,
 │   │                      no-minimize WndProc subclass, nGlide windowed toggle,
 │   │                      cheat hash injection, menu click reimpl,
-│   │                      dev cheat RPCs (48), windowState diagnostic
+│   │                      dev cheat RPCs (48)
 │   ├── frida_core.py      Carma2Backend (spawn/attach/detach, _rpc() wrapper,
-│   │                      adaptive auto_start_race, EXE verify, ensure_nglide)
+│   │                      auto_start_race, EXE verify, ensure_nglide)
 │   ├── cheat_db.py        94-entry cheat table (embedded, no binary needed)
 │   ├── dev_actions.py     Declarative registry of all 48 dev cheat actions
 │   │                      with metadata (group, kind, requires, state_key)
@@ -101,7 +99,7 @@ trainer/
 └── ui/
     ├── main_window.py     QMainWindow, tabs, top bar, hotkey, snap poller
     ├── bridge.py          Qt<->Frida thread bridge, named signals, worker thread,
-    │                      _safe_call helper, dev_call dispatcher, _emit_log
+    │                      _safe_call helper, dev_call dispatcher
     ├── style.py           Dark Carma-red QSS theme
     ├── tab_race.py        Race control buttons + pinnable favorites
     ├── tab_dev.py         Dev cheats tab — generic widget factory driven by
