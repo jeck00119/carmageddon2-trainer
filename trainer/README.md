@@ -90,7 +90,7 @@ trainer/
 │   │                      dev cheat RPCs (46)
 │   ├── frida_core.py      Carma2Backend (spawn/attach/detach, RPC wrappers,
 │   │                      adaptive auto_start_race, dev cheat methods)
-│   ├── cheat_db.py        Loads the 94-entry cheat table from carma2hw.bin
+│   ├── cheat_db.py        94-entry cheat table (embedded, no binary needed)
 │   ├── dev_actions.py     Declarative registry of all 46 dev cheat actions
 │   │                      with metadata (group, kind, requires, state_key)
 │   ├── diag_focus.py      Diagnostic template: log window-state Win32 calls
