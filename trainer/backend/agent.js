@@ -539,21 +539,6 @@ function callDev(addr) {
     }
 }
 
-var _spawnPowerupFn = null;
-function spawnPowerup(id) {
-    try {
-        if (_spawnPowerupFn === null) {
-            _spawnPowerupFn = new NativeFunction(
-                ptr(DEV.SPAWN_POWERUP), 'void',
-                ['pointer', 'int', 'int', 'int'], 'fastcall');
-        }
-        _spawnPowerupFn(ptr(DEV.GAME_STATE_PTR), id >>> 0, 1, 1);
-        return 'spawned ' + id;
-    } catch (e) {
-        return 'err: ' + e;
-    }
-}
-
 function addCreditDelta(delta) {
     // Direct read+write to BOTH credit addresses.
     try {
@@ -688,8 +673,7 @@ rpc.exports = {
                 return 'armed id=' + id + ' h=0x' + h1.toString(16);
             }
         }
-        // ID not in cheat table — try direct call (may crash outside game thread)
-        return spawnPowerup(id);
+        return 'not_found: id=' + id + ' not in cheat table';
     },
     spawnerFamily:    function (baseIdx) { return callPowerupSpawnerFamily(baseIdx); },
 

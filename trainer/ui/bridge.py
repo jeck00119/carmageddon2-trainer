@@ -31,9 +31,9 @@ class BackendBridge(QObject):
     favorites_changed = Signal()                 # user pinned/unpinned a powerup
     snap_updated    = Signal(dict)               # full compound snap (1 Hz from main_window poller)
 
-    # Agent-side events surfaced as named signals (less stringly-typed)
-    kbd_proc_captured = Signal(str)              # hook proc address
-    toggle_ready      = Signal()                 # nGlide toggle addrs extracted
+    # Agent-side events (used internally by dispatch handlers)
+    kbd_proc_captured = Signal(str)
+    toggle_ready      = Signal()
 
     # Dispatch table: agent event 'h' -> handler method name
     _AGENT_DISPATCH = {
@@ -262,8 +262,12 @@ class BackendBridge(QObject):
             self._emit_log(f'busy: {op_name} ignored')
             return
         self._worker = Worker(fn, *args)
-        self._worker.done.connect(lambda r, n=op_name: self.op_finished.emit(n, r))
+        self._worker.done.connect(lambda r, n=op_name: self._on_worker_done(n, r))
         self._worker.start()
+
+    def _on_worker_done(self, op_name: str, result):
+        self._worker = None
+        self.op_finished.emit(op_name, result)
 
     def auto_start_race(self):
         self.run_async('auto_start_race', self.backend.auto_start_race)

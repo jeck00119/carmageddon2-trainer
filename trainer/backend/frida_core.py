@@ -6,6 +6,7 @@ backend/agent.js. Designed to be driven from a Qt UI thread via signals,
 but is fully usable from a REPL for testing.
 """
 import os
+import shutil
 import string
 import sys
 import time
@@ -198,7 +199,6 @@ def ensure_nglide(game_dir: str) -> bool:
         # Back up the old one
         bak = dst + '.bak'
         try:
-            import shutil
             shutil.copy2(dst, bak)
             _log_stderr('nglide', f'backed up old DLL ({current_size} bytes) to {bak}')
         except Exception as e:
@@ -207,7 +207,6 @@ def ensure_nglide(game_dir: str) -> bool:
 
     # Copy the bundled DLL
     try:
-        import shutil
         shutil.copy2(bundled, dst)
         _log_stderr('nglide', f'installed bundled nGlide ({bundled_size} bytes) -> {dst}')
         return True
@@ -235,7 +234,6 @@ def _get_process_path(pid: int) -> Optional[str]:
     finally:
         if h:
             try:
-                import ctypes
                 ctypes.windll.kernel32.CloseHandle(h)
             except Exception:
                 pass
@@ -489,7 +487,7 @@ class Carma2Backend:
     def hud_cycle(self) -> str: return self._rpc('hud_cycle')
     def minimap_toggle(self) -> str: return self._rpc('minimap_toggle')
     def shadow_toggle(self) -> str: return self._rpc('shadow_toggle')
-    def shadow_3state(self) -> str: return self._rpc('shadow_3_state')
+    def shadow_3state(self) -> str: return self._rpc('shadow3_state')
     def zoom_incr(self) -> str: return self._rpc('zoom_incr')
     def zoom_decr(self) -> str: return self._rpc('zoom_decr')
     def camera_step(self) -> str: return self._rpc('camera_step')
@@ -506,8 +504,8 @@ class Carma2Backend:
     def dev_menu_cycle(self) -> str: return self._rpc('dev_menu_cycle')
     def recovery_cost(self) -> str: return self._rpc('recovery_cost')
 
-    def visual_toggle_7(self) -> str: return self._rpc('visual_toggle_7')
-    def visual_toggle_9(self) -> str: return self._rpc('visual_toggle_9')
+    def visual_toggle_7(self) -> str: return self._rpc('visual_toggle7')
+    def visual_toggle_9(self) -> str: return self._rpc('visual_toggle9')
 
     def lighting_profiler(self) -> str: return self._rpc('lighting_profiler')
     def gonad_of_death(self) -> str: return self._rpc('gonad_of_death')
