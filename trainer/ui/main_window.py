@@ -1,7 +1,6 @@
 """Main trainer window."""
 import ctypes
 import ctypes.wintypes
-import os
 import sys
 import webbrowser
 
@@ -36,18 +35,18 @@ class _HotkeyFilter(QAbstractNativeEventFilter):
                 msg = ctypes.wintypes.MSG.from_address(int(message))
                 if msg.message == WM_HOTKEY:
                     self.cb(int(msg.wParam))
-        except Exception as e:
-            print(f'[hotkey] filter error: {e}', file=sys.stderr, flush=True)
+        except Exception:
+            pass
         return False, 0
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, safe_mode: bool = False):
+    def __init__(self):
         super().__init__()
         self.setWindowTitle('Carmageddon 2 Trainer')
         self.resize(900, 640)
 
-        self.bridge = BackendBridge(safe_mode=safe_mode)
+        self.bridge = BackendBridge()
         self.bridge.log.connect(self._on_log)
         self.bridge.attached_changed.connect(self._on_attached_changed)
         self.bridge.op_finished.connect(self._on_op_finished)
@@ -99,14 +98,8 @@ class MainWindow(QMainWindow):
         self.btn_toggle_window.clicked.connect(self.bridge.alt_enter)
         top_lay.addWidget(self.btn_toggle_window)
 
-        # Log nGlide status for debugging
-        info = self.bridge.nglide_info
-        print(f'[trainer] nGlide: found={info.get("found")} version={info.get("version")!r} '
-              f'size={info.get("size")} ok={info.get("ok")} path={info.get("path")!r}',
-              file=sys.stderr, flush=True)
-        print(f'[trainer] game path: {self.bridge.game_path}', file=sys.stderr, flush=True)
-
         # Disable windowed controls if nGlide not compatible
+        info = self.bridge.nglide_info
         if not self.bridge.has_nglide:
             self.cb_windowed.setEnabled(False)
             tip = 'nGlide not installed — windowed mode unavailable'
@@ -124,7 +117,6 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(DevTab(self.bridge), 'Dev cheats')
         self.tabs.addTab(PowerupTab(self.bridge), 'Powerups')
         self.tabs.addTab(self.tab_status, 'Status')
-        # All cheats only added when Advanced mode is enabled — see _refresh_advanced
 
         # --- Layout ---
         central = QWidget()
@@ -139,11 +131,11 @@ class MainWindow(QMainWindow):
         self.status = QStatusBar()
         self.setStatusBar(self.status)
         self.lbl_state_friendly = QLabel('Game not running')
-        self.lbl_snap = QLabel('')          # technical text, only shown in Advanced
+        self.lbl_snap = QLabel('')
         self.status.addPermanentWidget(self.lbl_state_friendly)
         self.status.addPermanentWidget(self.lbl_snap)
 
-        # --- Snap poller (backs off on repeated failures) ---
+        # --- Snap poller ---
         self.snap_timer = QTimer(self)
         self.snap_timer.setInterval(1000)
         self.snap_timer.timeout.connect(self._poll_snap)
@@ -156,14 +148,11 @@ class MainWindow(QMainWindow):
         if geom:
             self.restoreGeometry(geom)
         self._advanced = self.settings.value('advanced', False, type=bool)
-        # Wire the Status tab's Advanced checkbox into our refresher
         self.tab_status.cb_advanced.setChecked(self._advanced)
         self.tab_status.cb_advanced.toggled.connect(self._on_advanced_toggled)
         self._refresh_advanced()
 
         # --- Global hotkey: Ctrl+Shift+W -> toggle windowed ---
-        # Works regardless of which window has focus (the game can stay
-        # focused while you press it).
         self._hk_filter = _HotkeyFilter(self._on_hotkey)
         QApplication.instance().installNativeEventFilter(self._hk_filter)
         try:
@@ -172,12 +161,8 @@ class MainWindow(QMainWindow):
                 MOD_CONTROL | MOD_SHIFT, VK_W)
             if ok:
                 self.status.showMessage('Global hotkey: Ctrl+Shift+W = toggle windowed', 8000)
-                print('[trainer] global hotkey registered: Ctrl+Shift+W', file=sys.stderr, flush=True)
-            else:
-                err = ctypes.GetLastError()
-                print(f'[trainer] RegisterHotKey failed (err={err})', file=sys.stderr, flush=True)
-        except Exception as e:
-            print(f'[trainer] hotkey setup exception: {e}', file=sys.stderr, flush=True)
+        except Exception:
+            pass
 
     def _on_hotkey(self, hk_id: int):
         if hk_id == HOTKEY_ID_ALT_ENTER:
@@ -186,7 +171,6 @@ class MainWindow(QMainWindow):
             self.bridge.alt_enter()
 
     def _attach_clicked(self):
-        # Arm the auto-toggle BEFORE spawning so toggle_ready fires it.
         if self.cb_windowed.isChecked() and not self.bridge.has_nglide:
             self._prompt_nglide_download()
             return
@@ -194,7 +178,6 @@ class MainWindow(QMainWindow):
         self.bridge.attach_or_spawn()
 
     def _on_nglide_changed(self, present: bool):
-        """Refresh windowed controls when nGlide status changes."""
         self.cb_windowed.setEnabled(present)
         if present:
             self.cb_windowed.setToolTip(
@@ -209,7 +192,6 @@ class MainWindow(QMainWindow):
             self.btn_toggle_window.setToolTip('nGlide not installed — windowed mode unavailable')
 
     def _prompt_nglide_download(self):
-        """Prompt user to install nGlide for windowed mode."""
         reply = QMessageBox.question(
             self, 'nGlide Required',
             'Windowed mode requires nGlide (a free Glide wrapper).\n\n'
@@ -221,11 +203,9 @@ class MainWindow(QMainWindow):
         self.cb_windowed.setChecked(False)
 
     def _on_game_not_found(self):
-        """Show file dialog to locate the game EXE."""
         self._browse_game_exe()
 
     def _browse_game_exe(self):
-        """Shared file dialog for locating CARMA2_HW.EXE."""
         path, _ = QFileDialog.getOpenFileName(
             self, 'Locate CARMA2_HW.EXE',
             'C:\\',
@@ -233,7 +213,6 @@ class MainWindow(QMainWindow):
         if path:
             if self.bridge.set_game_path(path):
                 self.status.showMessage(f'Game path: {path}', 8000)
-                # Update Status tab label if it exists
                 if hasattr(self.tab_status, 'lbl_path'):
                     self.tab_status.lbl_path.setText(path)
             else:
@@ -245,8 +224,6 @@ class MainWindow(QMainWindow):
 
     def _on_log(self, msg: str):
         self.status.showMessage(msg, 5000)
-        # Also dump to stderr so the user can run from a terminal and tail logs
-        print(f'[trainer] {msg}', file=sys.stderr, flush=True)
 
     def _on_attached_changed(self, attached: bool):
         if attached:
@@ -271,16 +248,12 @@ class MainWindow(QMainWindow):
         self._refresh_advanced()
 
     def _refresh_advanced(self):
-        # Show/hide the All cheats tab
         idx = self.tabs.indexOf(self.tab_cheats)
         if self._advanced and idx == -1:
-            # Insert at end
             self.tabs.addTab(self.tab_cheats, 'All cheats')
         elif not self._advanced and idx != -1:
             self.tabs.removeTab(idx)
-        # Toggle technical snap label visibility
         self.lbl_snap.setVisible(self._advanced)
-        # Forward to status tab so it can hide/show the LIVE GAME STATE group
         self.tab_status.set_advanced(self._advanced)
 
     def _poll_snap(self):
@@ -289,7 +262,6 @@ class MainWindow(QMainWindow):
             self.lbl_state_friendly.setText('Game not running')
             self.lbl_snap.setText('')
             self.tab_status.update_snap(None, False, None)
-            # Reset poller to normal speed
             if self.snap_timer.interval() != 1000:
                 self.snap_timer.setInterval(1000)
                 self._snap_fail_count = 0
@@ -297,21 +269,16 @@ class MainWindow(QMainWindow):
         s = self.bridge.snap()
         if s is None:
             self._snap_fail_count += 1
-            print(f'[poller] snap=None (fail #{self._snap_fail_count})',
-                  file=sys.stderr, flush=True)
             if self._snap_fail_count >= 3:
                 self.lbl_state_friendly.setText('Connection lost')
                 self.lbl_snap.setText('')
                 self.tab_status.update_snap(None, False, None)
-                print('[poller] 3 consecutive failures — auto-detaching',
-                      file=sys.stderr, flush=True)
                 self.bridge.log.emit('Connection lost — detached automatically')
                 self.bridge.detach()
                 self._snap_fail_count = 0
             return
         self._snap_fail_count = 0
         try:
-            # Friendly state text
             gs = s.get('game_state', 0)
             menu = s.get('menu', 0)
             sel = s.get('sel', 0)
@@ -325,22 +292,19 @@ class MainWindow(QMainWindow):
             self.lbl_snap.setText(f'menu=0x{menu:x} sel={sel} gs={gs} dgs={dgs}')
             self.tab_status.update_snap(s, True, self.bridge.backend.pid)
             self.bridge.snap_updated.emit(s)
-        except Exception as e:
-            print(f'[poller] snap processing error: {e}', file=sys.stderr, flush=True)
+        except Exception:
+            pass
 
     def closeEvent(self, ev):
-        print('[trainer] closeEvent — shutting down', file=sys.stderr, flush=True)
         try:
             ctypes.windll.user32.UnregisterHotKey(None, HOTKEY_ID_ALT_ENTER)
-        except Exception as e:
-            print(f'[trainer] UnregisterHotKey: {e}', file=sys.stderr, flush=True)
+        except Exception:
+            pass
         self.settings.setValue('geometry', self.saveGeometry())
         if hasattr(self.bridge, '_worker') and self.bridge._worker and self.bridge._worker.isRunning():
-            print('[trainer] waiting for worker thread...', file=sys.stderr, flush=True)
             self.bridge._worker.wait(2000)
         try:
             self.bridge.detach()
-        except Exception as e:
-            print(f'[trainer] detach on close: {e}', file=sys.stderr, flush=True)
-        print('[trainer] shutdown complete', file=sys.stderr, flush=True)
+        except Exception:
+            pass
         super().closeEvent(ev)

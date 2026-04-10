@@ -141,49 +141,6 @@ var injectArmed         = false;    // one-shot cheat hash override armed
 var injectH1            = 0;
 var injectH2            = 0;
 
-// ===========================================================================
-// Pre-flight: verify function prologues at hook addresses (on-disk bytes).
-// ===========================================================================
-function verifyAddresses() {
-    var checks = [
-        [VA.GET_CHEAT_HASH, 0x56, 'GetCheatInputHash'],  // push esi
-        [VA.FN_CLEANUP,     0x81, 'menu_cleanup'],        // sub esp, ...
-        [VA.FN_INIT,        0x81, 'menu_init'],           // sub esp, ...
-    ];
-    var ok = true;
-    for (var i = 0; i < checks.length; i++) {
-        var addr = checks[i][0];
-        var expected = checks[i][1];
-        var label = checks[i][2];
-        try {
-            var actual = ptr(addr).readU8();
-            if (actual !== expected) {
-                send({h: 'log', msg: 'ADDRESS MISMATCH: ' + label + ' @0x' +
-                    addr.toString(16) + ' byte=0x' + actual.toString(16) +
-                    ' expected=0x' + expected.toString(16)});
-                ok = false;
-            }
-        } catch (e) {
-            send({h: 'log', msg: 'ADDRESS UNREADABLE: ' + label + ' @0x' +
-                addr.toString(16) + ': ' + e});
-            ok = false;
-        }
-    }
-    if (ok) send({h: 'log', msg: 'address verification: all OK'});
-    return ok;
-}
-var addressesOk = verifyAddresses();
-
-// Safe mode: disable ALL hooks (user32, dinput, cheat injection, wndproc).
-// Only snap/RPC will work. Controlled via CARMA2_SAFE_MODE env var at spawn.
-var SAFE_MODE = false;
-try {
-    // Check if safe mode was requested (set by Python before script load)
-    if (typeof globalThis._safeMode !== 'undefined' && globalThis._safeMode) {
-        SAFE_MODE = true;
-    }
-} catch (e) {}
-send({h: 'log', msg: 'SAFE_MODE=' + SAFE_MODE});
 
 // ===========================================================================
 // nGlide WH_KEYBOARD toggle extraction
@@ -252,20 +209,18 @@ function doToggle() {
 var u32 = Process.findModuleByName('user32.dll');
 var postMessageA = null;
 
-if (u32 && !SAFE_MODE) {
-    var _hookOk = 0, _hookFail = 0;
+if (u32) {
     try {
         postMessageA = new NativeFunction(u32.getExportByName('PostMessageA'),
             'int', ['pointer', 'uint32', 'uint32', 'uint32'], 'stdcall');
-    } catch (e) { send({h: 'log', msg: 'PostMessageA resolve failed: ' + e}); }
+    } catch (e) {}
 
     // ---- Input release: blanket-ignore window-focus-stealing APIs ----
     function noop(name, ret, sig) {
         try {
             Interceptor.replace(u32.getExportByName(name),
                 new NativeCallback(function () { return ret; }, sig[0], sig[1], sig[2]));
-            _hookOk++;
-        } catch (e) { _hookFail++; send({h: 'log', msg: 'noop(' + name + ') failed: ' + e}); }
+        } catch (e) {}
     }
     noop('ClipCursor',              1,      ['int',     ['pointer'],                     'stdcall']);
     noop('SetCapture',              ptr(0), ['pointer', ['pointer'],                     'stdcall']);
@@ -277,8 +232,7 @@ if (u32 && !SAFE_MODE) {
     try {
         Interceptor.attach(u32.getExportByName('SetActiveWindow'),
             { onEnter: function (args) { args[0] = ptr(0); } });
-        _hookOk++;
-    } catch (e) { _hookFail++; send({h: 'log', msg: 'SetActiveWindow hook failed: ' + e}); }
+    } catch (e) {}
 
     try {
         Interceptor.attach(u32.getExportByName('SetWindowPos'), {
@@ -287,14 +241,12 @@ if (u32 && !SAFE_MODE) {
                 args[6] = ptr(args[6].toInt32() | 0x10);  // | SWP_NOACTIVATE
             }
         });
-        _hookOk++;
-    } catch (e) { _hookFail++; send({h: 'log', msg: 'SetWindowPos hook failed: ' + e}); }
+    } catch (e) {}
 
     // ---- WndProc subclass (no-minimize + WM_TRAINER_ALTENTER dispatch) ----
     // This runs for every message dispatched to the game window. The hot path
     // is the `default` switch case which is just a return.
     var hookedProcs = {};
-    var _wndprocMsgCount = 0;
 
     function hookWndProc(addr) {
         var key = addr.toString();
@@ -332,7 +284,6 @@ if (u32 && !SAFE_MODE) {
                     }
 
                     if (swallow) {
-                        _wndprocMsgCount++;
                         args[1] = ptr(WM_NULL);
                         args[2] = ptr(0);
                         args[3] = ptr(0);
@@ -353,8 +304,7 @@ if (u32 && !SAFE_MODE) {
                     } catch (e) { send({h: 'log', msg: name + ' readPointer failed: ' + e}); }
                 }
             });
-            _hookOk++;
-        } catch (e) { _hookFail++; send({h: 'log', msg: name + ' hook failed: ' + e}); }
+        } catch (e) {}
     }
     // WNDCLASSA   layout: style@+0, lpfnWndProc@+4
     // WNDCLASSEXA layout: cbSize@+0, style@+4, lpfnWndProc@+8
@@ -375,12 +325,10 @@ if (u32 && !SAFE_MODE) {
                     extractToggle(nglideKeyboardProc);
                 }
             });
-            _hookOk++;
-        } catch (e) { _hookFail++; send({h: 'log', msg: name + ' hook failed: ' + e}); }
+        } catch (e) {}
     }
     hookSetWHE('SetWindowsHookExA');
     hookSetWHE('SetWindowsHookExW');
-    send({h: 'log', msg: 'user32 hooks: ' + _hookOk + ' OK, ' + _hookFail + ' failed'});
 }
 
 // ===========================================================================
@@ -414,14 +362,11 @@ function tryHookDInput() {
         dinputHooked = true;
     } catch (e) { send({h: 'log', msg: 'DirectInput hook failed: ' + e}); }
 }
-if (!SAFE_MODE) {
-    tryHookDInput();
-    try {
-        Interceptor.attach(Module.getGlobalExportByName('LoadLibraryA'),
-            { onLeave: function () { tryHookDInput(); } });
-        send({h: 'log', msg: 'LoadLibraryA hook OK'});
-    } catch (e) { send({h: 'log', msg: 'LoadLibraryA hook failed: ' + e}); }
-}
+tryHookDInput();
+try {
+    Interceptor.attach(Module.getGlobalExportByName('LoadLibraryA'),
+        { onLeave: function () { tryHookDInput(); } });
+} catch (e) {}
 
 // ===========================================================================
 // Cheat hash injection
@@ -430,24 +375,15 @@ if (!SAFE_MODE) {
 // (h1, h2) written into the hash buffer, then disarms. The game's CheatDetect
 // compares the buffer to its 94-entry table and dispatches the matching handler.
 // ===========================================================================
-if (addressesOk && !SAFE_MODE) {
-    try {
-        Interceptor.attach(ptr(VA.GET_CHEAT_HASH), {
-            onLeave: function (retval) {
-                if (injectArmed) {
-                    ptr(VA.HASH_BUF).writeU32(injectH1);
-                    ptr(VA.HASH_BUF + 4).writeU32(injectH2);
-                    injectArmed = false;
-                }
-            }
-        });
-        send({h: 'log', msg: 'cheat hash hook OK @0x' + VA.GET_CHEAT_HASH.toString(16)});
-    } catch (e) {
-        send({h: 'log', msg: 'cheat hash hook FAILED: ' + e});
+Interceptor.attach(ptr(VA.GET_CHEAT_HASH), {
+    onLeave: function (retval) {
+        if (injectArmed) {
+            ptr(VA.HASH_BUF).writeU32(injectH1);
+            ptr(VA.HASH_BUF + 4).writeU32(injectH2);
+            injectArmed = false;
+        }
     }
-} else {
-    send({h: 'log', msg: 'SKIPPED cheat hash hook (addresses=' + addressesOk + ' safe=' + SAFE_MODE + ')'});
-}
+});
 
 // ===========================================================================
 // Menu click reimplementation
@@ -589,23 +525,6 @@ rpc.exports = {
             zoom_lod:     rd32(0x68be38),
             item_count:   rd32(0x7447d4),
             item_index:   rd32(0x7447f0),
-        };
-    },
-    windowState: function () {
-        var procs = Object.keys(hookedProcs || {});
-        var glideMod = null;
-        try { glideMod = Process.findModuleByName('glide2x.dll'); } catch (e) {}
-        return {
-            gameHwnd: gameHwnd ? gameHwnd.toString() : 'null',
-            postMessageA: postMessageA !== null,
-            hookedWndProcs: procs,
-            nglideKbdProc: nglideKeyboardProc ? nglideKeyboardProc.toString() : 'null',
-            toggleFlag: nglideToggleFlag ? nglideToggleFlag.toString() : 'null',
-            togglePending: nglideTogglePending ? nglideTogglePending.toString() : 'null',
-            swallowedMsgCount: _wndprocMsgCount,
-            glide2xLoaded: glideMod !== null,
-            glide2xBase: glideMod ? glideMod.base.toString() : 'null',
-            glide2xSize: glideMod ? glideMod.size : 0,
         };
     },
     clickSel: function (sel) { return click(sel); },
@@ -758,41 +677,6 @@ rpc.exports = {
     devQ:             function () { return callDev(DEV.FN_DEV_Q); },
     devW:             function () { return callDev(DEV.FN_DEV_W); },
 
-    // Generic (for trainer experimentation)
-    callAddr:         function (addr) { return callDev(addr >>> 0); },
-    readU32:          function (addr) {
-        try { return ptr(addr >>> 0).readU32(); }
-        catch (e) { return 0xDEAD; }
-    },
-    writeU32:         function (addr, val) {
-        try { ptr(addr >>> 0).writeU32(val >>> 0); return 'ok'; }
-        catch (e) { return 'err: ' + e; }
-    },
-
-    // String table reader — game builds a string table at 0x6b5f40 at
-    // startup (from data files). 0x514d70(ecx=id) = [id*4 + 0x6b5f40].
-    getString:        function (id) {
-        try {
-            var p = ptr(0x6b5f40 + (id >>> 0) * 4).readU32();
-            if (p === 0) return null;
-            return ptr(p).readCString(200);
-        } catch (e) { return null; }
-    },
-    // Batch read N strings starting from id
-    getStrings:       function (startId, count) {
-        var out = {};
-        for (var i = 0; i < count; i++) {
-            var id = startId + i;
-            var p = ptr(0x6b5f40 + id * 4).readU32();
-            if (p !== 0) {
-                try {
-                    var s = ptr(p).readCString(200);
-                    if (s && s.length > 0) out[id] = s;
-                } catch (e) {}
-            }
-        }
-        return out;
-    },
 };
 
 send({h: 'init_done'});
