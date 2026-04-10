@@ -48,11 +48,8 @@ def find_game(saved_path: str = '') -> Optional[str]:
       3. Steam library folders (from Windows registry)
       4. Common install paths on all drives
     """
-    _log_stderr('find_game', f'saved_path={saved_path!r}')
-
     # 1. Saved path
     if saved_path and os.path.isfile(saved_path):
-        _log_stderr('find_game', f'using saved path: {saved_path}')
         return saved_path
 
     # 2. Running process — if game is already open, get its path
@@ -62,24 +59,21 @@ def find_game(saved_path: str = '') -> Optional[str]:
             if proc.name.lower() == GAME_PROC_NAME:
                 path = _get_process_path(proc.pid)
                 if path and os.path.isfile(path):
-                    _log_stderr('find_game', f'found running: pid={proc.pid} path={path}')
                     return path
-    except Exception as e:
-        _log_stderr('find_game', f'process scan failed: {type(e).__name__}: {e}')
+    except Exception:
+        pass
 
     # 3. Steam library folders from registry
     try:
         steam_path = _get_steam_path()
         if steam_path:
-            _log_stderr('find_game', f'Steam path: {steam_path}')
             for lib_folder in _get_steam_libraries(steam_path):
                 candidate = os.path.join(lib_folder, 'steamapps', 'common',
                                          'Carmageddon2', GAME_EXE_NAME)
                 if os.path.isfile(candidate):
-                    _log_stderr('find_game', f'found in Steam lib: {candidate}')
                     return candidate
-    except Exception as e:
-        _log_stderr('find_game', f'Steam search failed: {type(e).__name__}: {e}')
+    except Exception:
+        pass
 
     # 4. Common paths on all drives
     drives = [f'{d}:\\' for d in string.ascii_uppercase
@@ -97,10 +91,8 @@ def find_game(saved_path: str = '') -> Optional[str]:
         for sub in subdirs:
             candidate = os.path.join(drive, sub, GAME_EXE_NAME)
             if os.path.isfile(candidate):
-                _log_stderr('find_game', f'found at common path: {candidate}')
                 return candidate
 
-    _log_stderr('find_game', 'game not found anywhere')
     return None
 
 
@@ -178,7 +170,6 @@ def check_nglide(game_dir: str) -> dict:
     else:
         result['ok'] = result['size'] > 150_000
 
-    _log_stderr('nglide', f'check result: {result}')
     return result
 
 
@@ -308,7 +299,6 @@ class Carma2Backend:
         return self.session is not None and self.script is not None
 
     def find_running(self) -> Optional[int]:
-        self._log(f'scanning for {GAME_PROC_NAME}...')
         try:
             for p in self.device.enumerate_processes():
                 if p.name.lower() == GAME_PROC_NAME:
@@ -631,8 +621,6 @@ class Carma2Backend:
     def _on_message(self, msg, data):
         try:
             mtype = msg.get('type', '?')
-            print(f'[frida msg] type={mtype} payload={msg.get("payload", "")!r}',
-                  file=sys.stderr, flush=True)
             if mtype == 'send':
                 payload = msg.get('payload')
                 if payload:
@@ -650,11 +638,11 @@ class Carma2Backend:
             traceback.print_exc(file=sys.stderr)
 
     def _log(self, s: str):
-        print(f'[backend] {s}', file=sys.stderr, flush=True)
         try:
             self._on_log(s)
         except Exception:
-            pass
+            # Fallback if Qt signal isn't connected yet
+            print(f'[backend] {s}', file=sys.stderr, flush=True)
 
 
 # ----- REPL test entry point -----

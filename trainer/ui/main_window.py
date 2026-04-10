@@ -149,7 +149,6 @@ class MainWindow(QMainWindow):
         self.snap_timer.timeout.connect(self._poll_snap)
         self.snap_timer.start()
         self._snap_fail_count = 0
-        self._snap_tick = 0  # counts polls for periodic window state dump
 
         # --- Restore window geometry + advanced mode ---
         self.settings = QSettings('carma2_tools', 'trainer')
@@ -183,8 +182,7 @@ class MainWindow(QMainWindow):
     def _on_hotkey(self, hk_id: int):
         if hk_id == HOTKEY_ID_ALT_ENTER:
             if not self.bridge.has_nglide:
-                return  # silently ignore — nGlide not installed
-            print('[trainer] hotkey Ctrl+Shift+W -> alt_enter', file=sys.stderr, flush=True)
+                return
             self.bridge.alt_enter()
 
     def _attach_clicked(self):
@@ -312,15 +310,6 @@ class MainWindow(QMainWindow):
                 self._snap_fail_count = 0
             return
         self._snap_fail_count = 0
-        self._snap_tick += 1
-        # Dump window state every 5s for debugging focus/windowed issues
-        if self._snap_tick % 5 == 1:
-            try:
-                ws = self.bridge.backend.window_state()
-                if ws:
-                    print(f'[window] {ws}', file=sys.stderr, flush=True)
-            except Exception:
-                pass
         try:
             # Friendly state text
             gs = s.get('game_state', 0)

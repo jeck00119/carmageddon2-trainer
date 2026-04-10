@@ -295,12 +295,6 @@ if (u32 && !SAFE_MODE) {
     // is the `default` switch case which is just a return.
     var hookedProcs = {};
     var _wndprocMsgCount = 0;
-    var _msgNames = {};
-    _msgNames[WM_ACTIVATE] = 'WM_ACTIVATE';
-    _msgNames[WM_ACTIVATEAPP] = 'WM_ACTIVATEAPP';
-    _msgNames[WM_NCACTIVATE] = 'WM_NCACTIVATE';
-    _msgNames[WM_KILLFOCUS] = 'WM_KILLFOCUS';
-    _msgNames[WM_TRAINER_ALTENTER] = 'WM_TRAINER_ALTENTER';
 
     function hookWndProc(addr) {
         var key = addr.toString();
@@ -323,10 +317,8 @@ if (u32 && !SAFE_MODE) {
 
                     var wp = args[2].toInt32();
                     var swallow = false;
-                    var name = _msgNames[msg] || ('0x' + msg.toString(16));
 
                     if (msg === WM_TRAINER_ALTENTER) {
-                        send({h: 'log', msg: 'WndProc: WM_TRAINER_ALTENTER -> doToggle'});
                         doToggle();
                         swallow = true;
                     } else if (msg === WM_ACTIVATEAPP && wp === 0) {
@@ -341,11 +333,6 @@ if (u32 && !SAFE_MODE) {
 
                     if (swallow) {
                         _wndprocMsgCount++;
-                        // Log first 20 swallowed messages, then every 50th
-                        if (_wndprocMsgCount <= 20 || _wndprocMsgCount % 50 === 0) {
-                            send({h: 'log', msg: 'WndProc SWALLOW #' + _wndprocMsgCount +
-                                  ': ' + name + ' wParam=' + wp});
-                        }
                         args[1] = ptr(WM_NULL);
                         args[2] = ptr(0);
                         args[3] = ptr(0);
@@ -362,8 +349,6 @@ if (u32 && !SAFE_MODE) {
                 onEnter: function (args) {
                     try {
                         var wp = args[0].add(wpOffset).readPointer();
-                        send({h: 'log', msg: name + ': lpfnWndProc=' + wp +
-                              (wp.isNull() ? ' (null, skip)' : ' -> hooking')});
                         if (!wp.isNull()) hookWndProc(wp);
                     } catch (e) { send({h: 'log', msg: name + ' readPointer failed: ' + e}); }
                 }
@@ -379,27 +364,13 @@ if (u32 && !SAFE_MODE) {
     captureFromRegister('RegisterClassExW', 8);
 
     // ---- Capture nGlide WH_KEYBOARD hook proc once, extract toggle addrs ----
-    var _hookTypes = {2: 'WH_KEYBOARD', 3: 'WH_GETMESSAGE', 4: 'WH_CALLWNDPROC',
-                      7: 'WH_MOUSE', 13: 'WH_KEYBOARD_LL', 14: 'WH_MOUSE_LL'};
     function hookSetWHE(name) {
         try {
             Interceptor.attach(u32.getExportByName(name), {
                 onEnter: function (args) {
-                    var hookType = args[0].toInt32();
-                    var proc = args[1];
-                    var typeName = _hookTypes[hookType] || ('type=' + hookType);
-                    // Find which module the proc belongs to
-                    var modName = '?';
-                    try {
-                        var m = Process.findModuleByAddress(proc);
-                        if (m) modName = m.name;
-                    } catch (e) {}
-                    send({h: 'log', msg: name + '(' + typeName + ', ' + proc +
-                          ') from ' + modName});
-
-                    if (hookType !== 2) return;                   // WH_KEYBOARD only
+                    if (args[0].toInt32() !== 2) return;          // WH_KEYBOARD only
                     if (!nglideKeyboardProc.isNull()) return;     // first one only
-                    nglideKeyboardProc = proc;
+                    nglideKeyboardProc = args[1];
                     send({h: 'kbd_proc', addr: nglideKeyboardProc.toString()});
                     extractToggle(nglideKeyboardProc);
                 }
@@ -660,8 +631,6 @@ rpc.exports = {
         return 'armed';
     },
     altEnter: function () {
-        send({h: 'log', msg: 'altEnter: hwnd=' + gameHwnd + ' postMsg=' + (postMessageA !== null) +
-              ' flag=' + nglideToggleFlag + ' pending=' + nglideTogglePending});
         if (gameHwnd.isNull() || postMessageA === null) return 'no_hwnd';
         if (nglideToggleFlag.isNull()) return 'no_toggle';
         postMessageA(gameHwnd, WM_TRAINER_ALTENTER, 0, 0);
