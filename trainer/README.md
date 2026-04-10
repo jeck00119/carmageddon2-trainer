@@ -9,7 +9,7 @@ simulation, no save-file editing, no game-file modification.
 - **Auto-start race** — skips menus, drops you straight into a race
 - **Fire any cheat** — all 94 cheat strings are known. Every powerup effect
   is documented (0 unknowns remaining).
-- **46 hidden dev cheats** (2026-04-10) — discovered via static analysis +
+- **48 hidden dev cheats** — discovered via static analysis +
   autonomous Frida probing. Includes instant repair, damage cycler (god mode),
   credit ops (+/- 2k/5k or set arbitrary), teleport, gravity toggle, timer
   freeze, HUD/MiniMap toggles, spectator camera, lock-on targeting, checkpoint
@@ -21,6 +21,8 @@ simulation, no save-file editing, no game-file modification.
 - **Friendly status text** — bottom of window shows "In Main menu" / "In race" etc.
 - **Disabled-when-detached** — buttons grey out when the game isn't attached
 - **Advanced/Developer mode** — opt-in toggle to expose the full cheat table + live debug state
+- **Auto-detects game path** — searches Steam registry, running processes, common install paths
+- **Bundles nGlide 2.60** — auto-installs the correct version for windowed mode support
 
 ## Run
 
@@ -28,10 +30,12 @@ simulation, no save-file editing, no game-file modification.
 py -3 trainer.py
 ```
 
-Requires Python 3.10+, `frida`, `PySide6`. Game must be the Steam build at the
-canonical path (`C:\Program Files (x86)\Steam\steamapps\common\Carmageddon2`).
+Requires Python 3.10+, `frida`, `PySide6`. The game must be the Steam build
+(`CARMA2_HW.EXE`, 2,680,320 bytes).
 
-For debug logs, run from a terminal — every action is mirrored to stderr.
+For debug logs, run from a terminal — important lifecycle events go to stderr.
+
+**Safe mode** (disables all hooks, only snap/RPC): `py -3 trainer.py --safe`
 
 **Global hotkey:** `Ctrl+Shift+W` toggles nGlide windowed/fullscreen mode at any
 time, regardless of which window has focus.
@@ -40,12 +44,12 @@ time, regardless of which window has focus.
 
 - **Race**
   - **RACE FLOW**: Auto-start race · Finish race · Enable cheat mode
-  - **SPECIAL CHEATS**: Fly mode · Gonad of death (non-powerup actions, can't be reached from the Powerups tab)
-  - **FAVORITES**: dynamic group of user-pinned powerups. First-run defaults: Turbo, Instant repair, Credit bonus, Solid granite car, Lunar gravity. Right-click any powerup in the Powerups tab to pin/unpin.
-- **Dev cheats** *(2026-04-10)* — 46 hidden developer features dispatched by setting `cheat_mode = 0xa11ee75d` and calling polled-table functions directly. Groups: dev mode toggle · player actions · credits ops · powerups spawner · movement · opponents cycler · spectator camera · HUD/display · sound · misc · experimental. Live state for credits, damage state, gravity, HUD mode, spectator state. **Enable Dev Mode first** or nothing else fires. Some features need true in-race state.
+  - **SPECIAL CHEATS**: Fly mode · Gonad of death (non-powerup actions)
+  - **FAVORITES**: dynamic group of user-pinned powerups. Right-click any powerup in the Powerups tab to pin/unpin.
+- **Dev cheats** — 48 hidden developer features dispatched by setting `cheat_mode = 0xa11ee75d` and calling polled-table functions directly. Groups: dev mode toggle · player actions · credits ops · powerups spawner · movement · opponents cycler · spectator camera · HUD/display · sound · misc · experimental. Live state for credits, damage state, gravity, HUD mode, spectator state. **Enable Dev Mode first** or nothing else fires.
 - **Powerups** — grid of all 89 spawn-powerup cheats with search filter. Right-click for the pin/unpin context menu. Pinned powerups get a Carma-red border.
 - **Status** — connection state, force-reattach, About text, and an **Advanced / developer mode** toggle.
-- **All cheats** *(only visible in Advanced mode)* — full 94-entry table view with handler/arg columns. Click a row + FIRE button, or double-click any row to fire instantly.
+- **All cheats** *(only visible in Advanced mode)* — full 94-entry table view with handler/arg columns.
 
 The top bar holds: connection state · Attach/Spawn · Detach · "Start in windowed" checkbox · "Windowed ⇄" runtime toggle button.
 
@@ -66,41 +70,40 @@ chain — no `SendInput`, no fake mouse cursor.
 To stop the game minimizing on alt-tab, the agent hooks `RegisterClass[Ex]A/W`
 at startup, captures the game's `lpfnWndProc`, and `Interceptor.attach`es it.
 On every WndProc call it inspects the message; deactivation messages
-(`WM_ACTIVATEAPP wParam=FALSE`, `WM_ACTIVATE WA_INACTIVE`, `WM_NCACTIVATE
-wParam=FALSE`, `WM_KILLFOCUS`) get rewritten to `WM_NULL` so the game's switch
-falls through and never triggers its display-mode tear-down.
+(`WM_ACTIVATEAPP`, `WM_ACTIVATE`, `WM_NCACTIVATE`, `WM_KILLFOCUS`) get rewritten
+to `WM_NULL` so the game never triggers its display-mode tear-down.
 
 For the windowed-mode toggle, the agent captures nGlide's `WH_KEYBOARD` hook
 proc address (installed via `SetWindowsHookExA` from `glide2x.dll`) and
 disassembles it to extract the two memory addresses nGlide flips to request a
 mode switch (`TOGGLE_PENDING` and `TOGGLE_FLAG`). At toggle time the trainer
-just writes those addresses directly — bypassing every guard check inside the
-hook proc and avoiding any synthetic input. nGlide's render thread picks up
-the flipped flag next frame and performs the actual mode switch.
+just writes those addresses directly.
 
 ## Files
 
 ```
 trainer/
-├── trainer.py             entry point (PySide6 app)
+├── trainer.py             entry point (--safe flag, startup banner)
+├── deps/
+│   └── glide2x.dll        bundled nGlide 2.60 (auto-installed)
 ├── backend/
 │   ├── agent.js           Frida script: input release, dinput non-exclusive,
 │   │                      no-minimize WndProc subclass, nGlide windowed toggle,
 │   │                      cheat hash injection, menu click reimpl,
-│   │                      dev cheat RPCs (46)
-│   ├── frida_core.py      Carma2Backend (spawn/attach/detach, RPC wrappers,
-│   │                      adaptive auto_start_race, dev cheat methods)
+│   │                      dev cheat RPCs (48), windowState diagnostic
+│   ├── frida_core.py      Carma2Backend (spawn/attach/detach, _rpc() wrapper,
+│   │                      adaptive auto_start_race, EXE verify, ensure_nglide)
 │   ├── cheat_db.py        94-entry cheat table (embedded, no binary needed)
-│   ├── dev_actions.py     Declarative registry of all 46 dev cheat actions
+│   ├── dev_actions.py     Declarative registry of all 48 dev cheat actions
 │   │                      with metadata (group, kind, requires, state_key)
 │   ├── diag_focus.py      Diagnostic template: log window-state Win32 calls
 │   └── diag_messages.py   Diagnostic template: log activation messages + WndProc
 └── ui/
     ├── main_window.py     QMainWindow, tabs, top bar, hotkey, snap poller
     ├── bridge.py          Qt<->Frida thread bridge, named signals, worker thread,
-    │                      _safe_call helper, dev_call dispatcher
+    │                      _safe_call helper, dev_call dispatcher, _emit_log
     ├── style.py           Dark Carma-red QSS theme
-    ├── tab_race.py        Race control buttons
+    ├── tab_race.py        Race control buttons + pinnable favorites
     ├── tab_dev.py         Dev cheats tab — generic widget factory driven by
     │                      dev_actions registry; live state from snap_updated
     ├── tab_powerups.py    89-button grid w/ search filter
@@ -114,24 +117,18 @@ When new cheat strings get reverse-engineered, just add them to
 `carma2_tools/hash_function.py:KNOWN_CHEATS`. The trainer picks them up
 automatically — `cheat_db.py` joins on `(h1, h2)`.
 
-If a powerup's effect description is missing from `POWERUP.TXT` (shows up as
-`'n/a'`), add a friendly override to `cheat_db.py:KNOWN_EFFECTS` keyed by
-powerup id. Example: `0: 'Credit bonus'` (for the WETWET cheat).
-
 ## Persistent settings
 
 Stored via `QSettings('carma2_tools', 'trainer')` (Windows registry):
 - `geometry` — window position/size
 - `advanced` — Advanced/Developer mode toggle
 - `favorites` — list of pinned cheat names
+- `game_exe` — auto-detected game path
 
 ## Adding a new dev cheat
 
 1. Add the function VA to `agent.js` `DEV` constants block
 2. Add an RPC export in `agent.js` `rpc.exports`
-3. Add a thin Python wrapper in `frida_core.py` (one liner)
+3. Add a thin Python wrapper in `frida_core.py` (one liner via `_rpc()`)
 4. Add an `Action(...)` row to `dev_actions.py`
 5. Restart the trainer — the DevTab picks it up automatically (no UI code)
-
-For features that read/write a state variable, also add the field to the
-compound `snap()` in `agent.js` so the live label updates.
