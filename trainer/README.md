@@ -33,8 +33,6 @@ py -3 trainer.py
 Requires Python 3.10+, `frida`, `PySide6`. The game must be the Steam build
 (`CARMA2_HW.EXE`, 2,680,320 bytes).
 
-For debug logs, run from a terminal — important lifecycle events go to stderr.
-
 **Global hotkey:** `Ctrl+Shift+W` toggles nGlide windowed/fullscreen mode at any
 time, regardless of which window has focus.
 
@@ -94,8 +92,8 @@ trainer/
 │   ├── cheat_db.py        94-entry cheat table (embedded, no binary needed)
 │   ├── dev_actions.py     Declarative registry of all 48 dev cheat actions
 │   │                      with metadata (group, kind, requires, state_key)
-│   ├── diag_focus.py      Diagnostic template: log window-state Win32 calls
-│   └── diag_messages.py   Diagnostic template: log activation messages + WndProc
+│   ├── diag_focus.py      (diagnostic template, not used at runtime)
+│   └── diag_messages.py   (diagnostic template, not used at runtime)
 └── ui/
     ├── main_window.py     QMainWindow, tabs, top bar, hotkey, snap poller
     ├── bridge.py          Qt<->Frida thread bridge, named signals, worker thread,
