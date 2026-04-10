@@ -1,11 +1,12 @@
 """Main trainer window."""
 import ctypes
 import ctypes.wintypes
+import os
 import sys
 
 from PySide6.QtCore import QAbstractNativeEventFilter, QSettings, QTimer, Qt
-from PySide6.QtWidgets import (QApplication, QCheckBox, QHBoxLayout, QLabel,
-                                QMainWindow, QPushButton, QStatusBar,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout,
+                                QLabel, QMainWindow, QPushButton, QStatusBar,
                                 QTabWidget, QVBoxLayout, QWidget)
 
 from ui.bridge import BackendBridge
@@ -49,6 +50,7 @@ class MainWindow(QMainWindow):
         self.bridge.log.connect(self._on_log)
         self.bridge.attached_changed.connect(self._on_attached_changed)
         self.bridge.op_finished.connect(self._on_op_finished)
+        self.bridge.game_not_found.connect(self._on_game_not_found)
 
         # --- Top bar: title + attach controls ---
         top = QWidget()
@@ -167,6 +169,18 @@ class MainWindow(QMainWindow):
         # Arm the auto-toggle BEFORE spawning so toggle_ready fires it.
         self.bridge.wants_windowed = self.cb_windowed.isChecked()
         self.bridge.attach_or_spawn()
+
+    def _on_game_not_found(self):
+        """Show file dialog to locate the game EXE."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, 'Locate CARMA2_HW.EXE',
+            'C:\\',
+            'Carmageddon 2 EXE (CARMA2_HW.EXE);;All files (*)')
+        if path and os.path.isfile(path):
+            self.bridge.set_game_path(path)
+            self.status.showMessage(f'Game path: {path}', 8000)
+        else:
+            self.status.showMessage('No game selected — click Attach/Spawn to try again', 5000)
 
     # --- slots ---
 

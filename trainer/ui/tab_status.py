@@ -1,7 +1,9 @@
-"""Status tab — connection info + live game state + advanced toggle."""
+"""Status tab — connection info + game path + live game state + advanced toggle."""
+import os
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QCheckBox, QFormLayout, QGroupBox, QLabel,
-                                QPushButton, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QCheckBox, QFileDialog, QFormLayout, QGroupBox,
+                                QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
+                                QWidget)
 
 MENU_NAMES = {
     0x5a80f0: 'Main menu',
@@ -34,6 +36,19 @@ class StatusTab(QWidget):
             '(e.g. after the game crashes or is restarted).')
         self.btn_reattach.clicked.connect(self._reattach)
         conn.addRow(self.btn_reattach)
+
+        # Game path
+        path_row = QHBoxLayout()
+        game_path = self.bridge.game_path or '(not found)'
+        self.lbl_path = QLabel(game_path)
+        self.lbl_path.setStyleSheet('color: #9aa0a6; font-size: 9pt;')
+        self.lbl_path.setWordWrap(True)
+        btn_browse = QPushButton('Change...')
+        btn_browse.setMaximumWidth(80)
+        btn_browse.clicked.connect(self._browse_game)
+        path_row.addWidget(self.lbl_path, 1)
+        path_row.addWidget(btn_browse)
+        conn.addRow('Game:', path_row)
 
         self.cb_advanced = QCheckBox('Advanced / developer mode')
         self.cb_advanced.setToolTip(
@@ -111,3 +126,11 @@ class StatusTab(QWidget):
     def _reattach(self):
         self.bridge.detach()
         self.bridge.attach_or_spawn()
+
+    def _browse_game(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, 'Locate CARMA2_HW.EXE', 'C:\\',
+            'Carmageddon 2 EXE (CARMA2_HW.EXE);;All files (*)')
+        if path and os.path.isfile(path):
+            self.bridge.set_game_path(path)
+            self.lbl_path.setText(path)

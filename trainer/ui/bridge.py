@@ -11,7 +11,7 @@ from PySide6.QtCore import QObject, QSettings, QThread, Signal
 
 from backend.cheat_db import load_cheat_table, powerups_only
 from backend.dev_actions import find_action
-from backend.frida_core import Carma2Backend
+from backend.frida_core import Carma2Backend, find_game
 
 
 # First-run favorites: the curated 5 powerups that used to be hardcoded
@@ -39,11 +39,23 @@ class BackendBridge(QObject):
         'init_done':   '_handle_init_done',
     }
 
+    # Emitted when game EXE can't be found — main_window shows a file dialog
+    game_not_found = Signal()
+
     def __init__(self):
         super().__init__()
+        self._settings = QSettings('carma2_tools', 'trainer')
+
+        # Auto-detect game path
+        saved = self._settings.value('game_exe', '')
+        game_exe = find_game(saved_path=saved or '')
+        if game_exe:
+            self._settings.setValue('game_exe', game_exe)
+
         self.backend = Carma2Backend(
             on_event=self._on_event,
             on_log=lambda s: self.log.emit(s),
+            game_exe=game_exe,
         )
         self._worker: Worker | None = None
         self.kbd_proc_addr: str = ''
@@ -51,8 +63,7 @@ class BackendBridge(QObject):
         # Cheat table loaded once at startup, shared by tabs.
         self.cheat_entries = load_cheat_table()
         self.powerup_entries = powerups_only(self.cheat_entries)
-        # Persistent favorites (cheat names)
-        self._settings = QSettings('carma2_tools', 'trainer')
+        # Persistent favorites (cheat names) — reuse self._settings from above
         saved = self._settings.value('favorites', None)
         if saved is None:
             self.favorites: list[str] = list(DEFAULT_FAVORITES)
@@ -107,13 +118,29 @@ class BackendBridge(QObject):
 
     # ----- attach lifecycle -----
 
+    @property
+    def game_path(self) -> str:
+        return self.backend.game_exe or ''
+
+    def set_game_path(self, path: str):
+        """Set or change the game EXE path. Persists to QSettings."""
+        self.backend.set_game_path(path)
+        self._settings.setValue('game_exe', path)
+        self.log.emit(f'Game path set: {path}')
+
     def attach_or_spawn(self):
         if self.backend.attach_running():
             self.attached_changed.emit(True)
+        elif not self.backend.game_exe:
+            self.log.emit('Game not found — please set the path')
+            self.game_not_found.emit()
         else:
             try:
                 self.backend.spawn()
                 self.attached_changed.emit(True)
+            except FileNotFoundError:
+                self.log.emit('Game EXE not found — please set the path')
+                self.game_not_found.emit()
             except Exception as e:
                 self.log.emit(f'spawn failed: {e}')
 
