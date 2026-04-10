@@ -131,6 +131,6 @@ class StatusTab(QWidget):
         path, _ = QFileDialog.getOpenFileName(
             self, 'Locate CARMA2_HW.EXE', 'C:\\',
             'Carmageddon 2 EXE (CARMA2_HW.EXE);;All files (*)')
-        if path and os.path.isfile(path):
-            self.bridge.set_game_path(path)
-            self.lbl_path.setText(path)
+        if path:
+            if self.bridge.set_game_path(path):
+                self.lbl_path.setText(path)

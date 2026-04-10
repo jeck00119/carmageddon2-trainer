@@ -172,13 +172,22 @@ class MainWindow(QMainWindow):
 
     def _on_game_not_found(self):
         """Show file dialog to locate the game EXE."""
+        self._browse_game_exe()
+
+    def _browse_game_exe(self):
+        """Shared file dialog for locating CARMA2_HW.EXE."""
         path, _ = QFileDialog.getOpenFileName(
             self, 'Locate CARMA2_HW.EXE',
             'C:\\',
             'Carmageddon 2 EXE (CARMA2_HW.EXE);;All files (*)')
-        if path and os.path.isfile(path):
-            self.bridge.set_game_path(path)
-            self.status.showMessage(f'Game path: {path}', 8000)
+        if path:
+            if self.bridge.set_game_path(path):
+                self.status.showMessage(f'Game path: {path}', 8000)
+                # Update Status tab label if it exists
+                if hasattr(self.tab_status, 'lbl_path'):
+                    self.tab_status.lbl_path.setText(path)
+            else:
+                self.status.showMessage('Invalid selection — please choose CARMA2_HW.EXE', 5000)
         else:
             self.status.showMessage('No game selected — click Attach/Spawn to try again', 5000)
 

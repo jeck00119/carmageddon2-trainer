@@ -5,6 +5,7 @@ Frida callbacks fire on Frida's own thread; we marshal them into Qt main
 thread via signals. Long-running ops (auto_start_race) run on a QThread
 worker so the UI stays responsive.
 """
+import os
 import threading
 
 from PySide6.QtCore import QObject, QSettings, QThread, Signal
@@ -49,8 +50,7 @@ class BackendBridge(QObject):
         # Auto-detect game path
         saved = self._settings.value('game_exe', '')
         game_exe = find_game(saved_path=saved or '')
-        if game_exe:
-            self._settings.setValue('game_exe', game_exe)
+        self._settings.setValue('game_exe', game_exe or '')  # always persist (clears stale paths)
 
         self.backend = Carma2Backend(
             on_event=self._on_event,
@@ -122,11 +122,19 @@ class BackendBridge(QObject):
     def game_path(self) -> str:
         return self.backend.game_exe or ''
 
-    def set_game_path(self, path: str):
-        """Set or change the game EXE path. Persists to QSettings."""
+    def set_game_path(self, path: str) -> bool:
+        """Set or change the game EXE path. Validates and persists to QSettings.
+        Returns True if path was accepted."""
+        if not os.path.isfile(path):
+            self.log.emit(f'Invalid path: {path}')
+            return False
+        if os.path.basename(path).upper() != 'CARMA2_HW.EXE':
+            self.log.emit(f'Wrong EXE: expected CARMA2_HW.EXE, got {os.path.basename(path)}')
+            return False
         self.backend.set_game_path(path)
         self._settings.setValue('game_exe', path)
-        self.log.emit(f'Game path set: {path}')
+        self.log.emit(f'Game path: {path}')
+        return True
 
     def attach_or_spawn(self):
         if self.backend.attach_running():
