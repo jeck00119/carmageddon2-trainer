@@ -122,13 +122,13 @@ class StatusTab(QWidget):
                 lbl.setText('—')
             return
 
-        menu_va = snap['menu']
+        menu_va = snap.get('menu', 0)
         menu_name = MENU_NAMES.get(menu_va, '?')
         self.lbl_menu.setText(f'0x{menu_va:08x}  ({menu_name})')
-        self.lbl_sel.setText(str(snap['sel']))
-        self.lbl_gs.setText(str(snap['game_state']))
-        self.lbl_dgs.setText(str(snap['dogame_state']))
-        in_race = snap['game_state'] != 0
+        self.lbl_sel.setText(str(snap.get('sel', 0)))
+        self.lbl_gs.setText(str(snap.get('game_state', 0)))
+        self.lbl_dgs.setText(str(snap.get('dogame_state', 0)))
+        in_race = snap.get('game_state', 0) != 0
         self.lbl_in_race.setText('YES' if in_race else 'no')
         self.lbl_in_race.setStyleSheet(
             'color: #2a2; font-weight: bold;' if in_race

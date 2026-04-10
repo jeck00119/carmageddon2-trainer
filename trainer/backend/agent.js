@@ -17,7 +17,10 @@
 // Helpers
 // ===========================================================================
 function rd32(va) { try { return ptr(va).readU32(); } catch (e) { return 0xDEAD; } }
-function wr32(va, v) { try { ptr(va).writeU32(v); } catch (e) {} }
+function wr32(va, v) {
+    try { ptr(va).writeU32(v); }
+    catch (e) { send({h: 'log', msg: 'wr32 FAILED @0x' + va.toString(16) + ': ' + e}); }
+}
 
 // ===========================================================================
 // Constants
@@ -250,17 +253,19 @@ var u32 = Process.findModuleByName('user32.dll');
 var postMessageA = null;
 
 if (u32 && !SAFE_MODE) {
+    var _hookOk = 0, _hookFail = 0;
     try {
         postMessageA = new NativeFunction(u32.getExportByName('PostMessageA'),
             'int', ['pointer', 'uint32', 'uint32', 'uint32'], 'stdcall');
-    } catch (e) {}
+    } catch (e) { send({h: 'log', msg: 'PostMessageA resolve failed: ' + e}); }
 
     // ---- Input release: blanket-ignore window-focus-stealing APIs ----
     function noop(name, ret, sig) {
         try {
             Interceptor.replace(u32.getExportByName(name),
                 new NativeCallback(function () { return ret; }, sig[0], sig[1], sig[2]));
-        } catch (e) {}
+            _hookOk++;
+        } catch (e) { _hookFail++; send({h: 'log', msg: 'noop(' + name + ') failed: ' + e}); }
     }
     noop('ClipCursor',              1,      ['int',     ['pointer'],                     'stdcall']);
     noop('SetCapture',              ptr(0), ['pointer', ['pointer'],                     'stdcall']);
@@ -272,7 +277,8 @@ if (u32 && !SAFE_MODE) {
     try {
         Interceptor.attach(u32.getExportByName('SetActiveWindow'),
             { onEnter: function (args) { args[0] = ptr(0); } });
-    } catch (e) {}
+        _hookOk++;
+    } catch (e) { _hookFail++; send({h: 'log', msg: 'SetActiveWindow hook failed: ' + e}); }
 
     try {
         Interceptor.attach(u32.getExportByName('SetWindowPos'), {
@@ -281,7 +287,8 @@ if (u32 && !SAFE_MODE) {
                 args[6] = ptr(args[6].toInt32() | 0x10);  // | SWP_NOACTIVATE
             }
         });
-    } catch (e) {}
+        _hookOk++;
+    } catch (e) { _hookFail++; send({h: 'log', msg: 'SetWindowPos hook failed: ' + e}); }
 
     // ---- WndProc subclass (no-minimize + WM_TRAINER_ALTENTER dispatch) ----
     // This runs for every message dispatched to the game window. The hot path
@@ -326,7 +333,7 @@ if (u32 && !SAFE_MODE) {
                     }
                 }
             });
-        } catch (e) {}
+        } catch (e) { send({h: 'log', msg: 'hookWndProc failed @' + addr + ': ' + e}); }
     }
 
     // Capture the game's WndProc by snooping RegisterClass[Ex]A/W.
@@ -337,10 +344,11 @@ if (u32 && !SAFE_MODE) {
                     try {
                         var wp = args[0].add(wpOffset).readPointer();
                         if (!wp.isNull()) hookWndProc(wp);
-                    } catch (e) {}
+                    } catch (e) { send({h: 'log', msg: name + ' readPointer failed: ' + e}); }
                 }
             });
-        } catch (e) {}
+            _hookOk++;
+        } catch (e) { _hookFail++; send({h: 'log', msg: name + ' hook failed: ' + e}); }
     }
     // WNDCLASSA   layout: style@+0, lpfnWndProc@+4
     // WNDCLASSEXA layout: cbSize@+0, style@+4, lpfnWndProc@+8
@@ -361,10 +369,12 @@ if (u32 && !SAFE_MODE) {
                     extractToggle(nglideKeyboardProc);
                 }
             });
-        } catch (e) {}
+            _hookOk++;
+        } catch (e) { _hookFail++; send({h: 'log', msg: name + ' hook failed: ' + e}); }
     }
     hookSetWHE('SetWindowsHookExA');
     hookSetWHE('SetWindowsHookExW');
+    send({h: 'log', msg: 'user32 hooks: ' + _hookOk + ' OK, ' + _hookFail + ' failed'});
 }
 
 // ===========================================================================
@@ -396,12 +406,15 @@ function tryHookDInput() {
             }
         });
         dinputHooked = true;
-    } catch (e) {}
+    } catch (e) { send({h: 'log', msg: 'DirectInput hook failed: ' + e}); }
 }
 if (!SAFE_MODE) {
     tryHookDInput();
-    Interceptor.attach(Module.getGlobalExportByName('LoadLibraryA'),
-        { onLeave: function () { tryHookDInput(); } });
+    try {
+        Interceptor.attach(Module.getGlobalExportByName('LoadLibraryA'),
+            { onLeave: function () { tryHookDInput(); } });
+        send({h: 'log', msg: 'LoadLibraryA hook OK'});
+    } catch (e) { send({h: 'log', msg: 'LoadLibraryA hook failed: ' + e}); }
 }
 
 // ===========================================================================
@@ -412,17 +425,22 @@ if (!SAFE_MODE) {
 // compares the buffer to its 94-entry table and dispatches the matching handler.
 // ===========================================================================
 if (addressesOk && !SAFE_MODE) {
-    Interceptor.attach(ptr(VA.GET_CHEAT_HASH), {
-        onLeave: function (retval) {
-            if (injectArmed) {
-                ptr(VA.HASH_BUF).writeU32(injectH1);
-                ptr(VA.HASH_BUF + 4).writeU32(injectH2);
-                injectArmed = false;
+    try {
+        Interceptor.attach(ptr(VA.GET_CHEAT_HASH), {
+            onLeave: function (retval) {
+                if (injectArmed) {
+                    ptr(VA.HASH_BUF).writeU32(injectH1);
+                    ptr(VA.HASH_BUF + 4).writeU32(injectH2);
+                    injectArmed = false;
+                }
             }
-        }
-    });
+        });
+        send({h: 'log', msg: 'cheat hash hook OK @0x' + VA.GET_CHEAT_HASH.toString(16)});
+    } catch (e) {
+        send({h: 'log', msg: 'cheat hash hook FAILED: ' + e});
+    }
 } else {
-    send({h: 'log', msg: 'SKIPPED cheat hash hook — address verification failed'});
+    send({h: 'log', msg: 'SKIPPED cheat hash hook (addresses=' + addressesOk + ' safe=' + SAFE_MODE + ')'});
 }
 
 // ===========================================================================
@@ -434,25 +452,31 @@ var fn_finalize = new NativeFunction(ptr(VA.FN_FINALIZE), 'void', ['pointer', 'p
 var fn_postfx   = new NativeFunction(ptr(VA.FN_POSTFX),   'void', ['pointer'],            'thiscall');
 
 function transition(oldMenu, newMenu) {
-    fn_cleanup(ptr(oldMenu));
-    wr32(VA.MENU_PTR, newMenu);
-    fn_init(ptr(newMenu));
-    if (rd32(oldMenu + 0x114) !== newMenu) {
-        wr32(newMenu + 0x114, oldMenu);
-    }
-    fn_finalize(ptr(oldMenu), ptr(newMenu));
-    if (newMenu === VA.QUIT_MENU) {
-        wr32(VA.SEL, 0);
-    } else {
-        wr32(VA.SEL, rd32(newMenu + 0x118));
-    }
-    var n = rd32(newMenu + 0x8790);
-    if (n > 0 && n < 256) {
-        for (var i = 0; i < n; i++) {
-            wr32(newMenu + i * 0x34 + 0x87a0, rd32(newMenu + i * 0x34 + 0x87c0));
+    try {
+        fn_cleanup(ptr(oldMenu));
+        wr32(VA.MENU_PTR, newMenu);
+        fn_init(ptr(newMenu));
+        if (rd32(oldMenu + 0x114) !== newMenu) {
+            wr32(newMenu + 0x114, oldMenu);
         }
+        fn_finalize(ptr(oldMenu), ptr(newMenu));
+        if (newMenu === VA.QUIT_MENU) {
+            wr32(VA.SEL, 0);
+        } else {
+            wr32(VA.SEL, rd32(newMenu + 0x118));
+        }
+        var n = rd32(newMenu + 0x8790);
+        if (n > 0 && n < 256) {
+            for (var i = 0; i < n; i++) {
+                wr32(newMenu + i * 0x34 + 0x87a0, rd32(newMenu + i * 0x34 + 0x87c0));
+            }
+        }
+        fn_postfx(ptr(newMenu));
+    } catch (e) {
+        send({h: 'log', msg: 'transition CRASHED: old=0x' + oldMenu.toString(16) +
+              ' new=0x' + newMenu.toString(16) + ' err=' + e});
+        throw e;
     }
-    fn_postfx(ptr(newMenu));
 }
 
 function click(sel) {

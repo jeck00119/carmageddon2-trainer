@@ -6,7 +6,9 @@ thread via signals. Long-running ops (auto_start_race) run on a QThread
 worker so the UI stays responsive.
 """
 import os
+import sys
 import threading
+import traceback
 
 from PySide6.QtCore import QObject, QSettings, QThread, Signal
 
@@ -14,6 +16,7 @@ from backend.cheat_db import load_cheat_table, powerups_only
 from backend.dev_actions import find_action
 from backend.frida_core import Carma2Backend, check_nglide, find_game
 
+_log = lambda msg: print(f'[bridge] {msg}', file=sys.stderr, flush=True)
 
 # First-run favorites: the curated 5 powerups that used to be hardcoded
 # in the Race tab's IN-RACE TOGGLES group.
@@ -47,40 +50,48 @@ class BackendBridge(QObject):
 
     def __init__(self, safe_mode: bool = False):
         super().__init__()
+        _log(f'init (safe_mode={safe_mode})')
         self._settings = QSettings('carma2_tools', 'trainer')
 
         # Auto-detect game path
         saved = self._settings.value('game_exe', '')
         game_exe = find_game(saved_path=saved or '')
-        self._settings.setValue('game_exe', game_exe or '')  # always persist (clears stale paths)
+        self._settings.setValue('game_exe', game_exe or '')
 
-        # Check nGlide status — log details for debugging
+        # Check nGlide status
         nglide_info = check_nglide(os.path.dirname(game_exe)) if game_exe else {'ok': False}
         self.has_nglide = nglide_info.get('ok', False)
         self.nglide_info = nglide_info
 
         self.backend = Carma2Backend(
             on_event=self._on_event,
-            on_log=lambda s: self.log.emit(s),
+            on_log=lambda s: self._emit_log(s),
             game_exe=game_exe,
             safe_mode=safe_mode,
         )
         self._worker: Worker | None = None
         self.kbd_proc_addr: str = ''
-        self.wants_windowed = False  # if True, fire alt_enter once toggle_ready
+        self.wants_windowed = False
         # Cheat table loaded once at startup, shared by tabs.
         self.cheat_entries = load_cheat_table()
         self.powerup_entries = powerups_only(self.cheat_entries)
-        # Persistent favorites (cheat names) — reuse self._settings from above
+        # Persistent favorites
         saved = self._settings.value('favorites', None)
         if saved is None:
             self.favorites: list[str] = list(DEFAULT_FAVORITES)
             self._settings.setValue('favorites', self.favorites)
         elif isinstance(saved, str):
-            # QSettings on some platforms returns a single string for a 1-item list
             self.favorites = [saved] if saved else []
         else:
             self.favorites = [str(x) for x in saved]
+        _log('init complete')
+
+    def _emit_log(self, s: str):
+        """Safe signal emit — won't crash if called from non-Qt thread."""
+        try:
+            self.log.emit(s)
+        except Exception as e:
+            print(f'[bridge] log.emit failed: {e}', file=sys.stderr, flush=True)
 
     def is_favorite(self, name: str) -> bool:
         return name in self.favorites
@@ -98,28 +109,40 @@ class BackendBridge(QObject):
     # ----- agent event dispatch -----
 
     def _on_event(self, e: dict):
-        handler_name = self._AGENT_DISPATCH.get(e.get('h'))
-        if handler_name:
-            getattr(self, handler_name)(e)
+        """Dispatches agent events — called from Frida's thread."""
+        try:
+            handler_name = self._AGENT_DISPATCH.get(e.get('h'))
+            if handler_name:
+                getattr(self, handler_name)(e)
+        except Exception as ex:
+            print(f'[bridge] _on_event exception: {ex}', file=sys.stderr, flush=True)
+            traceback.print_exc(file=sys.stderr)
 
     def _handle_kbd_proc(self, e: dict):
         self.kbd_proc_addr = e.get('addr', '')
-        self.log.emit(f'nGlide WH_KEYBOARD proc captured @ {self.kbd_proc_addr}')
+        self._emit_log(f'nGlide WH_KEYBOARD proc captured @ {self.kbd_proc_addr}')
         self.kbd_proc_captured.emit(self.kbd_proc_addr)
 
     def _handle_toggle_ready(self, e: dict):
-        self.log.emit('nGlide toggle addresses extracted — windowed toggle ready')
+        self._emit_log('nGlide toggle addresses extracted — windowed toggle ready')
         self.toggle_ready.emit()
         if self.wants_windowed:
             self.wants_windowed = False
-            self.log.emit('Auto-toggling to windowed mode in 2s...')
-            threading.Timer(2.0, self.alt_enter).start()
+            self._emit_log('Auto-toggling to windowed mode in 2s...')
+            threading.Timer(2.0, self._safe_alt_enter_timer).start()
+
+    def _safe_alt_enter_timer(self):
+        """Timer callback for auto-windowed — runs on Timer thread."""
+        try:
+            self.alt_enter()
+        except Exception as e:
+            print(f'[bridge] auto-windowed timer failed: {e}', file=sys.stderr, flush=True)
 
     def _handle_agent_log(self, e: dict):
-        self.log.emit(f'[agent] {e.get("msg", "")}')
+        self._emit_log(f'[agent] {e.get("msg", "")}')
 
     def _handle_init_done(self, e: dict):
-        self.log.emit('agent loaded')
+        self._emit_log('agent loaded')
 
     # ----- attach lifecycle -----
 
@@ -128,13 +151,12 @@ class BackendBridge(QObject):
         return self.backend.game_exe or ''
 
     def set_game_path(self, path: str) -> bool:
-        """Set or change the game EXE path. Validates and persists to QSettings.
-        Returns True if path was accepted."""
+        """Set or change the game EXE path. Validates and persists to QSettings."""
         if not os.path.isfile(path):
-            self.log.emit(f'Invalid path: {path}')
+            self._emit_log(f'Invalid path: {path}')
             return False
         if os.path.basename(path).upper() != 'CARMA2_HW.EXE':
-            self.log.emit(f'Wrong EXE: expected CARMA2_HW.EXE, got {os.path.basename(path)}')
+            self._emit_log(f'Wrong EXE: expected CARMA2_HW.EXE, got {os.path.basename(path)}')
             return False
         self.backend.set_game_path(path)
         self._settings.setValue('game_exe', path)
@@ -143,30 +165,43 @@ class BackendBridge(QObject):
         self.has_nglide = self.nglide_info.get('ok', False)
         if self.has_nglide != old_nglide:
             self.nglide_changed.emit(self.has_nglide)
-        self.log.emit(f'Game path: {path}')
+        self._emit_log(f'Game path: {path}')
         return True
 
     def attach_or_spawn(self):
-        self.log.emit(f'attach_or_spawn: exe={self.backend.game_exe} nglide={self.has_nglide}')
-        if self.backend.attach_running():
-            self.log.emit(f'attached to running process pid={self.backend.pid}')
-            self.attached_changed.emit(True)
-        elif not self.backend.game_exe:
-            self.log.emit('Game not found — please set the path')
-            self.game_not_found.emit()
-        else:
-            try:
-                self.backend.spawn()
-                self.log.emit(f'spawned pid={self.backend.pid}')
+        _log(f'attach_or_spawn: exe={self.backend.game_exe} nglide={self.has_nglide}')
+        self._emit_log(f'attach_or_spawn: exe={self.backend.game_exe} nglide={self.has_nglide}')
+        try:
+            if self.backend.attach_running():
+                self._emit_log(f'attached to running process pid={self.backend.pid}')
                 self.attached_changed.emit(True)
-            except FileNotFoundError:
-                self.log.emit('Game EXE not found — please set the path')
-                self.game_not_found.emit()
-            except Exception as e:
-                self.log.emit(f'spawn failed: {e}')
+                return
+        except Exception as e:
+            _log(f'attach_running failed: {type(e).__name__}: {e}')
+            self._emit_log(f'attach failed: {e}')
+
+        if not self.backend.game_exe:
+            self._emit_log('Game not found — please set the path')
+            self.game_not_found.emit()
+            return
+
+        try:
+            self.backend.spawn()
+            self._emit_log(f'spawned pid={self.backend.pid}')
+            self.attached_changed.emit(True)
+        except FileNotFoundError:
+            self._emit_log('Game EXE not found — please set the path')
+            self.game_not_found.emit()
+        except Exception as e:
+            _log(f'spawn failed: {type(e).__name__}: {e}')
+            traceback.print_exc(file=sys.stderr)
+            self._emit_log(f'spawn failed: {e}')
 
     def detach(self):
-        self.backend.detach()
+        try:
+            self.backend.detach()
+        except Exception as e:
+            _log(f'detach exception: {e}')
         self.attached_changed.emit(False)
 
     def is_attached(self) -> bool:
@@ -180,21 +215,18 @@ class BackendBridge(QObject):
     # ----- fire-and-forget ops -----
 
     def _safe_call(self, op_label: str, fn, *args, log_success: bool = True):
-        """Generic wrapper: check attached, try call, log result/error.
-
-        Returns the call result or None on failure. All bridge methods that
-        wrap a backend RPC should go through this.
-        """
+        """Generic wrapper: check attached, try call, log result/error."""
         if not self.is_attached():
-            self.log.emit(f'{op_label}: not attached')
+            self._emit_log(f'{op_label}: not attached')
             return None
         try:
             result = fn(*args)
             if log_success:
-                self.log.emit(f'{op_label}: {result}')
+                self._emit_log(f'{op_label}: {result}')
             return result
         except Exception as e:
-            self.log.emit(f'{op_label} failed: {e}')
+            _log(f'{op_label} failed: {type(e).__name__}: {e}')
+            self._emit_log(f'{op_label} failed: {e}')
             return None
 
     def fire_named(self, name: str):
@@ -208,18 +240,14 @@ class BackendBridge(QObject):
     # ----- dev cheat dispatcher -----
 
     def dev_call(self, action_name: str, *runtime_args):
-        """Look up a dev action by name and call its RPC. Used by DevTab.
-
-        runtime_args are appended to the action's static args (e.g. a
-        spinbox value passed in for an 'input' kind action).
-        """
+        """Look up a dev action by name and call its RPC."""
         action = find_action(action_name)
         if action is None:
-            self.log.emit(f'dev_call: unknown action {action_name!r}')
+            self._emit_log(f'dev_call: unknown action {action_name!r}')
             return None
         rpc = getattr(self.backend, action.rpc, None)
         if rpc is None:
-            self.log.emit(f'dev_call: backend missing {action.rpc!r}')
+            self._emit_log(f'dev_call: backend missing {action.rpc!r}')
             return None
         args = list(action.args) + list(runtime_args)
         return self._safe_call(action.label, rpc, *args)
@@ -228,7 +256,7 @@ class BackendBridge(QObject):
 
     def run_async(self, op_name: str, fn, *args):
         if self._worker is not None and self._worker.isRunning():
-            self.log.emit(f'busy: {op_name} ignored')
+            self._emit_log(f'busy: {op_name} ignored')
             return
         self._worker = Worker(fn, *args)
         self._worker.done.connect(lambda r, n=op_name: self.op_finished.emit(n, r))
@@ -253,5 +281,7 @@ class Worker(QThread):
         try:
             result = self._fn(*self._args)
         except Exception as e:
+            tb = traceback.format_exc()
+            print(f'[worker] exception: {e}\n{tb}', file=sys.stderr, flush=True)
             result = f'error: {e}'
         self.done.emit(result)

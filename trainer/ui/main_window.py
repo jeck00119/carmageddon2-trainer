@@ -311,34 +311,37 @@ class MainWindow(QMainWindow):
                 self._snap_fail_count = 0
             return
         self._snap_fail_count = 0
-        # Friendly state text
-        if s['game_state'] != 0:
-            friendly = 'In race'
-        else:
-            menu_name = MENU_NAMES.get(s['menu'])
-            friendly = f'In {menu_name}' if menu_name else 'In menu'
-        self.lbl_state_friendly.setText(friendly)
-        # Technical snap (only visible in advanced)
-        self.lbl_snap.setText(
-            f'menu=0x{s["menu"]:x} sel={s["sel"]} '
-            f'gs={s["game_state"]} dgs={s["dogame_state"]}'
-        )
-        self.tab_status.update_snap(s, True, self.bridge.backend.pid)
-        # Emit compound state to DevTab (only when snap is valid)
-        if s:
+        try:
+            # Friendly state text
+            gs = s.get('game_state', 0)
+            menu = s.get('menu', 0)
+            sel = s.get('sel', 0)
+            dgs = s.get('dogame_state', 0)
+            if gs != 0:
+                friendly = 'In race'
+            else:
+                menu_name = MENU_NAMES.get(menu)
+                friendly = f'In {menu_name}' if menu_name else 'In menu'
+            self.lbl_state_friendly.setText(friendly)
+            self.lbl_snap.setText(f'menu=0x{menu:x} sel={sel} gs={gs} dgs={dgs}')
+            self.tab_status.update_snap(s, True, self.bridge.backend.pid)
             self.bridge.snap_updated.emit(s)
+        except Exception as e:
+            print(f'[poller] snap processing error: {e}', file=sys.stderr, flush=True)
 
     def closeEvent(self, ev):
+        print('[trainer] closeEvent — shutting down', file=sys.stderr, flush=True)
         try:
             ctypes.windll.user32.UnregisterHotKey(None, HOTKEY_ID_ALT_ENTER)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f'[trainer] UnregisterHotKey: {e}', file=sys.stderr, flush=True)
         self.settings.setValue('geometry', self.saveGeometry())
-        # Wait for worker thread (e.g. auto_start_race) to finish
         if hasattr(self.bridge, '_worker') and self.bridge._worker and self.bridge._worker.isRunning():
+            print('[trainer] waiting for worker thread...', file=sys.stderr, flush=True)
             self.bridge._worker.wait(2000)
         try:
             self.bridge.detach()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f'[trainer] detach on close: {e}', file=sys.stderr, flush=True)
+        print('[trainer] shutdown complete', file=sys.stderr, flush=True)
         super().closeEvent(ev)
