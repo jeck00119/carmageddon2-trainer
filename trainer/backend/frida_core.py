@@ -121,6 +121,19 @@ def _get_steam_libraries(steam_path: str) -> list[str]:
     return libs
 
 
+def check_nglide(game_dir: str) -> bool:
+    """Check if nGlide is installed in the game folder.
+    nGlide's glide2x.dll is ~200KB+; the stock Steam wrapper is ~50KB."""
+    if not game_dir:
+        return False
+    dll = os.path.join(game_dir, 'glide2x.dll')
+    if not os.path.isfile(dll):
+        return False
+    # nGlide 2.x is typically 150KB-300KB; stock wrappers are much smaller
+    size = os.path.getsize(dll)
+    return size > 100_000  # >100KB = likely nGlide
+
+
 def _get_process_path(pid: int) -> Optional[str]:
     """Get the full exe path for a running process by PID."""
     try:

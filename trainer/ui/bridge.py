@@ -12,7 +12,7 @@ from PySide6.QtCore import QObject, QSettings, QThread, Signal
 
 from backend.cheat_db import load_cheat_table, powerups_only
 from backend.dev_actions import find_action
-from backend.frida_core import Carma2Backend, find_game
+from backend.frida_core import Carma2Backend, check_nglide, find_game
 
 
 # First-run favorites: the curated 5 powerups that used to be hardcoded
@@ -42,6 +42,8 @@ class BackendBridge(QObject):
 
     # Emitted when game EXE can't be found — main_window shows a file dialog
     game_not_found = Signal()
+    # Emitted when nGlide is not detected — windowed mode unavailable
+    nglide_missing = Signal()
 
     def __init__(self):
         super().__init__()
@@ -51,6 +53,8 @@ class BackendBridge(QObject):
         saved = self._settings.value('game_exe', '')
         game_exe = find_game(saved_path=saved or '')
         self._settings.setValue('game_exe', game_exe or '')  # always persist (clears stale paths)
+
+        self.has_nglide = check_nglide(os.path.dirname(game_exe)) if game_exe else False
 
         self.backend = Carma2Backend(
             on_event=self._on_event,
@@ -133,6 +137,7 @@ class BackendBridge(QObject):
             return False
         self.backend.set_game_path(path)
         self._settings.setValue('game_exe', path)
+        self.has_nglide = check_nglide(os.path.dirname(path))
         self.log.emit(f'Game path: {path}')
         return True
 

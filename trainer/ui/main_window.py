@@ -3,11 +3,12 @@ import ctypes
 import ctypes.wintypes
 import os
 import sys
+import webbrowser
 
 from PySide6.QtCore import QAbstractNativeEventFilter, QSettings, QTimer, Qt
 from PySide6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout,
-                                QLabel, QMainWindow, QPushButton, QStatusBar,
-                                QTabWidget, QVBoxLayout, QWidget)
+                                QLabel, QMainWindow, QMessageBox, QPushButton,
+                                QStatusBar, QTabWidget, QVBoxLayout, QWidget)
 
 from ui.bridge import BackendBridge
 from ui.tab_cheats import CheatsTab
@@ -51,6 +52,7 @@ class MainWindow(QMainWindow):
         self.bridge.attached_changed.connect(self._on_attached_changed)
         self.bridge.op_finished.connect(self._on_op_finished)
         self.bridge.game_not_found.connect(self._on_game_not_found)
+        self.bridge.nglide_missing.connect(self._on_nglide_missing)
 
         # --- Top bar: title + attach controls ---
         top = QWidget()
@@ -85,17 +87,23 @@ class MainWindow(QMainWindow):
         self.cb_windowed = QCheckBox('Start in windowed')
         self.cb_windowed.setToolTip(
             'When enabled, the trainer toggles to windowed mode automatically '
-            'after spawning the game. Set this BEFORE pressing Attach/Spawn.')
+            'after spawning the game. Requires nGlide.')
         top_lay.addWidget(self.cb_windowed)
 
         self.btn_toggle_window = QPushButton('Windowed ⇄')
         self.btn_toggle_window.setMinimumHeight(36)
         self.btn_toggle_window.setToolTip(
             'Toggle between windowed and fullscreen at runtime '
-            '(or use the global Ctrl+Shift+W hotkey).')
+            '(or use the global Ctrl+Shift+W hotkey). Requires nGlide.')
         self.btn_toggle_window.setEnabled(False)
         self.btn_toggle_window.clicked.connect(self.bridge.alt_enter)
         top_lay.addWidget(self.btn_toggle_window)
+
+        # Disable windowed controls if nGlide not detected
+        if not self.bridge.has_nglide:
+            self.cb_windowed.setEnabled(False)
+            self.cb_windowed.setToolTip('nGlide not installed — windowed mode unavailable')
+            self.btn_toggle_window.setToolTip('nGlide not installed — windowed mode unavailable')
 
         # --- Tabs ---
         self.tabs = QTabWidget()
@@ -167,8 +175,23 @@ class MainWindow(QMainWindow):
 
     def _attach_clicked(self):
         # Arm the auto-toggle BEFORE spawning so toggle_ready fires it.
+        if self.cb_windowed.isChecked() and not self.bridge.has_nglide:
+            self._on_nglide_missing()
+            return
         self.bridge.wants_windowed = self.cb_windowed.isChecked()
         self.bridge.attach_or_spawn()
+
+    def _on_nglide_missing(self):
+        """Prompt user to install nGlide for windowed mode."""
+        reply = QMessageBox.question(
+            self, 'nGlide Required',
+            'Windowed mode requires nGlide (a free Glide wrapper).\n\n'
+            'The game will still work in fullscreen without it.\n\n'
+            'Open the nGlide download page?',
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if reply == QMessageBox.Yes:
+            webbrowser.open('https://www.zeus-software.com/downloads/nglide')
+        self.cb_windowed.setChecked(False)
 
     def _on_game_not_found(self):
         """Show file dialog to locate the game EXE."""
