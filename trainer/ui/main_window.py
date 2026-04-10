@@ -298,10 +298,14 @@ class MainWindow(QMainWindow):
         s = self.bridge.snap()
         if s is None:
             self._snap_fail_count += 1
+            print(f'[poller] snap=None (fail #{self._snap_fail_count})',
+                  file=sys.stderr, flush=True)
             if self._snap_fail_count >= 3:
                 self.lbl_state_friendly.setText('Connection lost')
                 self.lbl_snap.setText('')
                 self.tab_status.update_snap(None, False, None)
+                print('[poller] 3 consecutive failures — auto-detaching',
+                      file=sys.stderr, flush=True)
                 self.bridge.log.emit('Connection lost — detached automatically')
                 self.bridge.detach()
                 self._snap_fail_count = 0

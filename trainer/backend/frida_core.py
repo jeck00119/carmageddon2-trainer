@@ -223,15 +223,19 @@ class Carma2Backend:
         return self.script is not None
 
     def find_running(self) -> Optional[int]:
+        print(f'[backend] scanning for {GAME_PROC_NAME}...', file=sys.stderr, flush=True)
         for p in self.device.enumerate_processes():
             if p.name.lower() == GAME_PROC_NAME:
+                print(f'[backend] found pid={p.pid} name={p.name}', file=sys.stderr, flush=True)
                 return p.pid
+        print(f'[backend] {GAME_PROC_NAME} not running', file=sys.stderr, flush=True)
         return None
 
     def attach_running(self) -> bool:
         pid = self.find_running()
         if pid is None:
             return False
+        self._log(f'attaching to existing process pid={pid}')
         self._attach(pid, resume=False)
         return True
 
@@ -247,26 +251,65 @@ class Carma2Backend:
         return pid
 
     def _attach(self, pid: int, resume: bool):
+        self._log(f'attaching to pid={pid} (resume={resume})')
         with open(AGENT_JS, 'r', encoding='utf-8') as f:
             src = f.read()
-        session = self.device.attach(pid)
+        self._log(f'agent.js loaded ({len(src)} bytes)')
+        try:
+            session = self.device.attach(pid)
+        except Exception as e:
+            self._log(f'device.attach() FAILED: {type(e).__name__}: {e}')
+            raise
+        self._log('session created')
+        session.on('detached', self._on_session_detached)
         script = session.create_script(src)
         script.on('message', self._on_message)
-        script.load()
+        self._log('loading script...')
+        try:
+            script.load()
+        except Exception as e:
+            self._log(f'script.load() FAILED: {type(e).__name__}: {e}')
+            raise
+        self._log('script loaded — checking exports...')
         self.session = session
         self.script = script
         self.api = script.exports_sync
         self.pid = pid
+        # Verify agent is responsive
+        try:
+            test = self.api.snap()
+            self._log(f'agent alive — snap={test}')
+        except Exception as e:
+            self._log(f'agent snap test failed: {type(e).__name__}: {e}')
         if resume:
+            self._log('resuming process...')
             self.device.resume(pid)
-        self._log(f'attached pid={pid}')
+            self._log('process resumed')
+        self._log(f'fully attached pid={pid}')
+
+    def _on_session_detached(self, reason, crash):
+        """Called by Frida when the session drops."""
+        print(f'[backend] *** SESSION DETACHED ***', file=sys.stderr, flush=True)
+        print(f'[backend]   reason: {reason}', file=sys.stderr, flush=True)
+        print(f'[backend]   crash:  {crash}', file=sys.stderr, flush=True)
+        if crash:
+            print(f'[backend]   crash report: {crash.report}' if hasattr(crash, 'report') else '',
+                  file=sys.stderr, flush=True)
+            print(f'[backend]   crash summary: {crash.summary}' if hasattr(crash, 'summary') else '',
+                  file=sys.stderr, flush=True)
+        self._log(f'SESSION DETACHED: reason={reason} crash={crash}')
+        self.session = None
+        self.script = None
+        self.api = None
 
     def detach(self):
+        print(f'[backend] detach() called (session={self.session is not None}, pid={self.pid})',
+              file=sys.stderr, flush=True)
         if self.session is not None:
             try:
                 self.session.detach()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f'[backend] session.detach() exception: {e}', file=sys.stderr, flush=True)
         self.session = None
         self.script = None
         self.api = None
@@ -280,7 +323,8 @@ class Carma2Backend:
             return None
         try:
             return self.api.snap()
-        except (frida.InvalidOperationError, frida.TransportError):
+        except (frida.InvalidOperationError, frida.TransportError) as e:
+            self._log(f'snap() failed: {type(e).__name__}: {e}')
             return None
 
     def click_sel(self, sel: int) -> str:
@@ -474,13 +518,19 @@ class Carma2Backend:
     # ----- internals -----
 
     def _on_message(self, msg, data):
+        print(f'[frida msg] type={msg.get("type")} payload={msg.get("payload", "")!r}',
+              file=sys.stderr, flush=True)
         if msg.get('type') == 'send':
             payload = msg['payload']
             self._on_event(payload)
         elif msg.get('type') == 'error':
-            self._log(f'[script error] {msg.get("description")}')
+            desc = msg.get('description', '')
+            stack = msg.get('stack', '')
+            self._log(f'[script error] {desc}')
+            print(f'[frida error] {desc}\n{stack}', file=sys.stderr, flush=True)
 
     def _log(self, s: str):
+        print(f'[backend] {s}', file=sys.stderr, flush=True)
         self._on_log(s)
 
 
