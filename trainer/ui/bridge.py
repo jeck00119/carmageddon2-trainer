@@ -45,7 +45,7 @@ class BackendBridge(QObject):
     # Emitted when nGlide status changes — UI should refresh windowed controls
     nglide_changed = Signal(bool)  # True = nGlide present
 
-    def __init__(self):
+    def __init__(self, safe_mode: bool = False):
         super().__init__()
         self._settings = QSettings('carma2_tools', 'trainer')
 
@@ -63,6 +63,7 @@ class BackendBridge(QObject):
             on_event=self._on_event,
             on_log=lambda s: self.log.emit(s),
             game_exe=game_exe,
+            safe_mode=safe_mode,
         )
         self._worker: Worker | None = None
         self.kbd_proc_addr: str = ''

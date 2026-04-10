@@ -139,14 +139,13 @@ var injectH1            = 0;
 var injectH2            = 0;
 
 // ===========================================================================
-// Pre-flight: verify function prologues at hook addresses.
-// If bytes don't match, the EXE is a different build and hooks will crash.
+// Pre-flight: verify function prologues at hook addresses (on-disk bytes).
 // ===========================================================================
 function verifyAddresses() {
     var checks = [
-        [VA.GET_CHEAT_HASH, '55', 'GetCheatInputHash'],
-        [VA.FN_CLEANUP,     '55', 'menu_cleanup'],
-        [VA.FN_INIT,        '55', 'menu_init'],
+        [VA.GET_CHEAT_HASH, 0x56, 'GetCheatInputHash'],  // push esi
+        [VA.FN_CLEANUP,     0x81, 'menu_cleanup'],        // sub esp, ...
+        [VA.FN_INIT,        0x81, 'menu_init'],           // sub esp, ...
     ];
     var ok = true;
     for (var i = 0; i < checks.length; i++) {
@@ -154,10 +153,11 @@ function verifyAddresses() {
         var expected = checks[i][1];
         var label = checks[i][2];
         try {
-            var actual = ptr(addr).readU8().toString(16);
+            var actual = ptr(addr).readU8();
             if (actual !== expected) {
                 send({h: 'log', msg: 'ADDRESS MISMATCH: ' + label + ' @0x' +
-                    addr.toString(16) + ' byte=0x' + actual + ' expected=0x' + expected});
+                    addr.toString(16) + ' byte=0x' + actual.toString(16) +
+                    ' expected=0x' + expected.toString(16)});
                 ok = false;
             }
         } catch (e) {
@@ -170,6 +170,17 @@ function verifyAddresses() {
     return ok;
 }
 var addressesOk = verifyAddresses();
+
+// Safe mode: disable ALL hooks (user32, dinput, cheat injection, wndproc).
+// Only snap/RPC will work. Controlled via CARMA2_SAFE_MODE env var at spawn.
+var SAFE_MODE = false;
+try {
+    // Check if safe mode was requested (set by Python before script load)
+    if (typeof globalThis._safeMode !== 'undefined' && globalThis._safeMode) {
+        SAFE_MODE = true;
+    }
+} catch (e) {}
+send({h: 'log', msg: 'SAFE_MODE=' + SAFE_MODE});
 
 // ===========================================================================
 // nGlide WH_KEYBOARD toggle extraction
@@ -238,7 +249,7 @@ function doToggle() {
 var u32 = Process.findModuleByName('user32.dll');
 var postMessageA = null;
 
-if (u32) {
+if (u32 && !SAFE_MODE) {
     try {
         postMessageA = new NativeFunction(u32.getExportByName('PostMessageA'),
             'int', ['pointer', 'uint32', 'uint32', 'uint32'], 'stdcall');
@@ -387,9 +398,11 @@ function tryHookDInput() {
         dinputHooked = true;
     } catch (e) {}
 }
-tryHookDInput();
-Interceptor.attach(Module.getGlobalExportByName('LoadLibraryA'),
-    { onLeave: function () { tryHookDInput(); } });
+if (!SAFE_MODE) {
+    tryHookDInput();
+    Interceptor.attach(Module.getGlobalExportByName('LoadLibraryA'),
+        { onLeave: function () { tryHookDInput(); } });
+}
 
 // ===========================================================================
 // Cheat hash injection
@@ -398,7 +411,7 @@ Interceptor.attach(Module.getGlobalExportByName('LoadLibraryA'),
 // (h1, h2) written into the hash buffer, then disarms. The game's CheatDetect
 // compares the buffer to its 94-entry table and dispatches the matching handler.
 // ===========================================================================
-if (addressesOk) {
+if (addressesOk && !SAFE_MODE) {
     Interceptor.attach(ptr(VA.GET_CHEAT_HASH), {
         onLeave: function (retval) {
             if (injectArmed) {

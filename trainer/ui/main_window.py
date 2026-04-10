@@ -42,12 +42,12 @@ class _HotkeyFilter(QAbstractNativeEventFilter):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, safe_mode: bool = False):
         super().__init__()
         self.setWindowTitle('Carmageddon 2 Trainer')
         self.resize(900, 640)
 
-        self.bridge = BackendBridge()
+        self.bridge = BackendBridge(safe_mode=safe_mode)
         self.bridge.log.connect(self._on_log)
         self.bridge.attached_changed.connect(self._on_attached_changed)
         self.bridge.op_finished.connect(self._on_op_finished)

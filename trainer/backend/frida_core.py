@@ -205,12 +205,14 @@ class Carma2Backend:
 
     def __init__(self, on_event: Optional[Callable[[dict], None]] = None,
                  on_log: Optional[Callable[[str], None]] = None,
-                 game_exe: Optional[str] = None):
+                 game_exe: Optional[str] = None,
+                 safe_mode: bool = False):
         self.device = frida.get_local_device()
         self.session: Optional[frida.core.Session] = None
         self.script: Optional[frida.core.Script] = None
         self.api = None
         self.pid: Optional[int] = None
+        self.safe_mode = safe_mode
         self.game_exe: Optional[str] = game_exe
         self.game_dir: Optional[str] = os.path.dirname(game_exe) if game_exe else None
         self._on_event = on_event or (lambda e: None)
@@ -280,9 +282,12 @@ class Carma2Backend:
         return pid
 
     def _attach(self, pid: int, resume: bool):
-        self._log(f'attaching to pid={pid} (resume={resume})')
+        self._log(f'attaching to pid={pid} (resume={resume}) safe_mode={self.safe_mode}')
         with open(AGENT_JS, 'r', encoding='utf-8') as f:
             src = f.read()
+        # Inject safe mode flag at the top of the script
+        if self.safe_mode:
+            src = 'globalThis._safeMode = true;\n' + src
         self._log(f'agent.js loaded ({len(src)} bytes)')
         try:
             session = self.device.attach(pid)

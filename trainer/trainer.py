@@ -15,11 +15,16 @@ from ui.style import QSS
 
 
 def main():
+    safe_mode = '--safe' in sys.argv
+    if safe_mode:
+        print('[trainer] *** SAFE MODE — all hooks disabled, only snap/RPC ***',
+              file=sys.stderr, flush=True)
+
     app = QApplication(sys.argv)
     app.setApplicationName('Carma2 Trainer')
     app.setStyle('Fusion')
     app.setStyleSheet(QSS)
-    win = MainWindow()
+    win = MainWindow(safe_mode=safe_mode)
     win.show()
     sys.exit(app.exec())
 
