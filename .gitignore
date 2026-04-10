@@ -1,0 +1,19 @@
+# Game binary (2.6MB — not redistributable)
+carma2hw.bin
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Probe outputs (regenerable)
+*.log
+*.json
+!package.json
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Extracted game data (regenerable from DATA.TWT)
+powerup.txt

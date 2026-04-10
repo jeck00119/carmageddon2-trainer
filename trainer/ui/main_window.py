@@ -1,0 +1,266 @@
+"""Main trainer window."""
+import ctypes
+import ctypes.wintypes
+import sys
+
+from PySide6.QtCore import QAbstractNativeEventFilter, QSettings, QTimer, Qt
+from PySide6.QtWidgets import (QApplication, QCheckBox, QHBoxLayout, QLabel,
+                                QMainWindow, QPushButton, QStatusBar,
+                                QTabWidget, QVBoxLayout, QWidget)
+
+from ui.bridge import BackendBridge
+from ui.tab_cheats import CheatsTab
+from ui.tab_dev import DevTab
+from ui.tab_powerups import PowerupTab
+from ui.tab_race import RaceTab
+from ui.tab_status import MENU_NAMES, StatusTab
+
+
+WM_HOTKEY = 0x0312
+MOD_CONTROL = 0x0002
+MOD_SHIFT = 0x0004
+VK_W = 0x57
+HOTKEY_ID_ALT_ENTER = 0xC2A1
+
+
+class _HotkeyFilter(QAbstractNativeEventFilter):
+    def __init__(self, callback):
+        super().__init__()
+        self.cb = callback
+
+    def nativeEventFilter(self, eventType, message):
+        try:
+            if bytes(eventType).startswith(b'windows'):
+                msg = ctypes.wintypes.MSG.from_address(int(message))
+                if msg.message == WM_HOTKEY:
+                    self.cb(int(msg.wParam))
+        except Exception as e:
+            print(f'[hotkey] filter error: {e}', file=sys.stderr, flush=True)
+        return False, 0
+
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle('Carmageddon 2 Trainer')
+        self.resize(900, 640)
+
+        self.bridge = BackendBridge()
+        self.bridge.log.connect(self._on_log)
+        self.bridge.attached_changed.connect(self._on_attached_changed)
+        self.bridge.op_finished.connect(self._on_op_finished)
+
+        # --- Top bar: title + attach controls ---
+        top = QWidget()
+        top_lay = QHBoxLayout(top)
+        top_lay.setContentsMargins(16, 14, 16, 8)
+        top_lay.setSpacing(12)
+
+        title = QLabel('CARMAGEDDON 2  ·  TRAINER')
+        title.setObjectName('title')
+        top_lay.addWidget(title)
+
+        top_lay.addSpacing(20)
+
+        self.lbl_state = QLabel('●  Detached')
+        self.lbl_state.setStyleSheet('color: #e85050; font-weight: 600;')
+        top_lay.addWidget(self.lbl_state)
+
+        top_lay.addStretch()
+
+        self.btn_attach = QPushButton('Attach / Spawn game')
+        self.btn_attach.setObjectName('primary')
+        self.btn_attach.setMinimumHeight(36)
+        self.btn_attach.clicked.connect(self._attach_clicked)
+        top_lay.addWidget(self.btn_attach)
+
+        self.btn_detach = QPushButton('Detach')
+        self.btn_detach.setMinimumHeight(36)
+        self.btn_detach.clicked.connect(self.bridge.detach)
+        self.btn_detach.setEnabled(False)
+        top_lay.addWidget(self.btn_detach)
+
+        self.cb_windowed = QCheckBox('Start in windowed')
+        self.cb_windowed.setToolTip(
+            'When enabled, the trainer toggles to windowed mode automatically '
+            'after spawning the game. Set this BEFORE pressing Attach/Spawn.')
+        top_lay.addWidget(self.cb_windowed)
+
+        self.btn_toggle_window = QPushButton('Windowed ⇄')
+        self.btn_toggle_window.setMinimumHeight(36)
+        self.btn_toggle_window.setToolTip(
+            'Toggle between windowed and fullscreen at runtime '
+            '(or use the global Ctrl+Shift+W hotkey).')
+        self.btn_toggle_window.setEnabled(False)
+        self.btn_toggle_window.clicked.connect(self.bridge.alt_enter)
+        top_lay.addWidget(self.btn_toggle_window)
+
+        # --- Tabs ---
+        self.tabs = QTabWidget()
+        self.tab_status = StatusTab(self.bridge)
+        self.tab_cheats = CheatsTab(self.bridge)
+        self.tabs.addTab(RaceTab(self.bridge), 'Race')
+        self.tabs.addTab(DevTab(self.bridge), 'Dev cheats')
+        self.tabs.addTab(PowerupTab(self.bridge), 'Powerups')
+        self.tabs.addTab(self.tab_status, 'Status')
+        # All cheats only added when Advanced mode is enabled — see _refresh_advanced
+
+        # --- Layout ---
+        central = QWidget()
+        v = QVBoxLayout(central)
+        v.setContentsMargins(12, 0, 12, 12)
+        v.setSpacing(8)
+        v.addWidget(top)
+        v.addWidget(self.tabs, 1)
+        self.setCentralWidget(central)
+
+        # --- Status bar ---
+        self.status = QStatusBar()
+        self.setStatusBar(self.status)
+        self.lbl_state_friendly = QLabel('Game not running')
+        self.lbl_snap = QLabel('')          # technical text, only shown in Advanced
+        self.status.addPermanentWidget(self.lbl_state_friendly)
+        self.status.addPermanentWidget(self.lbl_snap)
+
+        # --- Snap poller (backs off on repeated failures) ---
+        self.snap_timer = QTimer(self)
+        self.snap_timer.setInterval(1000)
+        self.snap_timer.timeout.connect(self._poll_snap)
+        self.snap_timer.start()
+        self._snap_fail_count = 0
+
+        # --- Restore window geometry + advanced mode ---
+        self.settings = QSettings('carma2_tools', 'trainer')
+        geom = self.settings.value('geometry')
+        if geom:
+            self.restoreGeometry(geom)
+        self._advanced = self.settings.value('advanced', False, type=bool)
+        # Wire the Status tab's Advanced checkbox into our refresher
+        self.tab_status.cb_advanced.setChecked(self._advanced)
+        self.tab_status.cb_advanced.toggled.connect(self._on_advanced_toggled)
+        self._refresh_advanced()
+
+        # --- Global hotkey: Ctrl+Shift+W -> toggle windowed ---
+        # Works regardless of which window has focus (the game can stay
+        # focused while you press it).
+        self._hk_filter = _HotkeyFilter(self._on_hotkey)
+        QApplication.instance().installNativeEventFilter(self._hk_filter)
+        try:
+            ok = ctypes.windll.user32.RegisterHotKey(
+                None, HOTKEY_ID_ALT_ENTER,
+                MOD_CONTROL | MOD_SHIFT, VK_W)
+            if ok:
+                self.status.showMessage('Global hotkey: Ctrl+Shift+W = toggle windowed', 8000)
+                print('[trainer] global hotkey registered: Ctrl+Shift+W', file=sys.stderr, flush=True)
+            else:
+                err = ctypes.GetLastError()
+                print(f'[trainer] RegisterHotKey failed (err={err})', file=sys.stderr, flush=True)
+        except Exception as e:
+            print(f'[trainer] hotkey setup exception: {e}', file=sys.stderr, flush=True)
+
+    def _on_hotkey(self, hk_id: int):
+        if hk_id == HOTKEY_ID_ALT_ENTER:
+            print('[trainer] hotkey Ctrl+Shift+W -> alt_enter', file=sys.stderr, flush=True)
+            self.bridge.alt_enter()
+
+    def _attach_clicked(self):
+        # Arm the auto-toggle BEFORE spawning so toggle_ready fires it.
+        self.bridge.wants_windowed = self.cb_windowed.isChecked()
+        self.bridge.attach_or_spawn()
+
+    # --- slots ---
+
+    def _on_log(self, msg: str):
+        self.status.showMessage(msg, 5000)
+        # Also dump to stderr so the user can run from a terminal and tail logs
+        print(f'[trainer] {msg}', file=sys.stderr, flush=True)
+
+    def _on_attached_changed(self, attached: bool):
+        if attached:
+            self.lbl_state.setText(f'●  Attached  ·  pid {self.bridge.backend.pid}')
+            self.lbl_state.setStyleSheet('color: #4ec27a; font-weight: 600;')
+            self.btn_attach.setEnabled(False)
+            self.btn_detach.setEnabled(True)
+            self.btn_toggle_window.setEnabled(True)
+        else:
+            self.lbl_state.setText('●  Detached')
+            self.lbl_state.setStyleSheet('color: #e85050; font-weight: 600;')
+            self.btn_attach.setEnabled(True)
+            self.btn_detach.setEnabled(False)
+            self.btn_toggle_window.setEnabled(False)
+
+    def _on_op_finished(self, op_name: str, result):
+        self.status.showMessage(f'{op_name}: {result}', 5000)
+
+    def _on_advanced_toggled(self, on: bool):
+        self._advanced = on
+        self.settings.setValue('advanced', on)
+        self._refresh_advanced()
+
+    def _refresh_advanced(self):
+        # Show/hide the All cheats tab
+        idx = self.tabs.indexOf(self.tab_cheats)
+        if self._advanced and idx == -1:
+            # Insert at end
+            self.tabs.addTab(self.tab_cheats, 'All cheats')
+        elif not self._advanced and idx != -1:
+            self.tabs.removeTab(idx)
+        # Toggle technical snap label visibility
+        self.lbl_snap.setVisible(self._advanced)
+        # Forward to status tab so it can hide/show the LIVE GAME STATE group
+        self.tab_status.set_advanced(self._advanced)
+
+    def _poll_snap(self):
+        attached = self.bridge.is_attached()
+        if not attached:
+            self.lbl_state_friendly.setText('Game not running')
+            self.lbl_snap.setText('')
+            self.tab_status.update_snap(None, False, None)
+            # Reset poller to normal speed
+            if self.snap_timer.interval() != 1000:
+                self.snap_timer.setInterval(1000)
+                self._snap_fail_count = 0
+            return
+        s = self.bridge.snap()
+        if s is None:
+            self._snap_fail_count += 1
+            if self._snap_fail_count >= 3:
+                self.lbl_state_friendly.setText('Connection lost')
+                self.lbl_snap.setText('')
+                self.tab_status.update_snap(None, False, None)
+                self.bridge.log.emit('Connection lost — detached automatically')
+                self.bridge.detach()
+                self._snap_fail_count = 0
+            return
+        self._snap_fail_count = 0
+        # Friendly state text
+        if s['game_state'] != 0:
+            friendly = 'In race'
+        else:
+            menu_name = MENU_NAMES.get(s['menu'])
+            friendly = f'In {menu_name}' if menu_name else 'In menu'
+        self.lbl_state_friendly.setText(friendly)
+        # Technical snap (only visible in advanced)
+        self.lbl_snap.setText(
+            f'menu=0x{s["menu"]:x} sel={s["sel"]} '
+            f'gs={s["game_state"]} dgs={s["dogame_state"]}'
+        )
+        self.tab_status.update_snap(s, True, self.bridge.backend.pid)
+        # Emit compound state to DevTab (only when snap is valid)
+        if s:
+            self.bridge.snap_updated.emit(s)
+
+    def closeEvent(self, ev):
+        try:
+            ctypes.windll.user32.UnregisterHotKey(None, HOTKEY_ID_ALT_ENTER)
+        except Exception:
+            pass
+        self.settings.setValue('geometry', self.saveGeometry())
+        # Wait for worker thread (e.g. auto_start_race) to finish
+        if hasattr(self.bridge, '_worker') and self.bridge._worker and self.bridge._worker.isRunning():
+            self.bridge._worker.wait(2000)
+        try:
+            self.bridge.detach()
+        except Exception:
+            pass
+        super().closeEvent(ev)
