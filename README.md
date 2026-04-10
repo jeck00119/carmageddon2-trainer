@@ -1,20 +1,59 @@
-# Carmageddon 2 Tools
+# Carmageddon 2 Trainer
 
-Reverse engineering / runtime patching tools for **Carmageddon 2: Carpocalypse Now** (1998, Stainless Software / SCi).
+A runtime trainer and reverse-engineering toolkit for **Carmageddon 2: Carpocalypse Now** (1998, Stainless Software). Built with [Frida](https://frida.re/) and PySide6. Targets the Steam build.
 
-Targets the Steam build's hardware-accelerated executable: `CARMA2_HW.EXE` (PE32 Win95, ImageBase `0x00400000`, ~2.6 MB).
+## What we discovered
 
----
+We completely reverse-engineered the game's cheat system and found a hidden developer menu that Stainless left in the binary — with features that nobody online has documented.
 
-## Quick start
+### The cheat system (100% decoded)
+
+The game has a 94-entry cheat table where typed strings are hashed and matched. We reversed the hash function, brute-forced 56 strings, and solved the remaining 38 by cross-referencing the [CWA Wiki](https://wiki.cwaboard.co.uk/wiki/Power_Ups_in_Carmageddon_II). **All 94 cheat strings are now known.** There's also a hidden cheat (`MWUCUZYSFUYHTQWXEPVU`) not in the table — it toggles sound and secretly unlocks a car carousel in the main menu.
+
+### The hidden developer menu (48 features)
+
+By tracing the game's polled-table dispatcher at `0x442e90`, we found **48 dev features** that Stainless used during development. The [Carmageddon Wiki](https://carmageddon.fandom.com/wiki/Edit_mode) says dev mode is *"broken on Steam edition"* — our trainer bypasses this entirely using Frida.
+
+Discovered dev features include:
+- **Instant repair, damage cycler (god mode), timer freeze** — core gameplay cheats
+- **+2000 / +5000 / -5000 credits, set arbitrary credits** — full credit control
+- **Gravity toggle** (lift off / back to earth), **teleport / reset position**
+- **Spectator camera** with opponent lock-on targeting
+- **Checkpoint finder** — dev navigation aid that shows the path to the next checkpoint
+- **9 camera modes** including **Ped Cam** (follows a pedestrian!) and **Drone Cam** (follows an AI car) — listed on [TCRF](https://tcrf.net/Carmageddon_II:_Carpocalypse_Now) as unused cut content, but we found how to re-enable them via flag arrays at `0x58f600`/`0x58f610`
+- **Upgrade purchase system** (buy armour/power/offensive upgrades)
+- **HUD mode cycler** (6 modes), **shadow toggles**, **zoom/LOD control**
+- **AI debug logger** — makes opponents announce their AI decisions
+- **Hidden cheat → car carousel** — the hidden cheat enables a secret menu item that lets you browse cars from the main menu
+
+### Myth busted: IBETYOUCANTPRINTCUNT
+
+The community believes typing `IBETYOUCANTPRINTCUNT` activates dev mode. We proved this is **false for the Steam build** — the hash `h2` doesn't appear anywhere in the binary. The value `0x564e78b9` (h1 of that string) is only used as a magic constant that `LAPMYLOVEPUMP` writes to the cheat-mode flag. In single-player, `LAPMYLOVEPUMP` already enables ALL dev features.
+
+### All 98 powerup effects documented
+
+Every powerup in the game now has a known effect. The last unknown was `GLUGLUG` (powerup ID 1) — it gives **9000 credits**, the biggest single credit bonus in the game.
+
+## The trainer
 
 ```
 py -3 trainer/trainer.py
 ```
 
-The **trainer** is the user-facing app. It spawns the game, hooks input release / no-minimize / cheat injection / nGlide windowed toggle, and provides a PySide6 GUI with 4 tabs (Race, Dev cheats, Powerups, Status) plus a hidden "All cheats" tab in Advanced mode. See `trainer/README.md` for full details.
+Requires Python 3.10+, `frida`, `PySide6`. See [`trainer/README.md`](trainer/README.md) for details.
 
-**Project status (2026-04-10):** The cheat system is 100% reverse-engineered. All 94 cheat table strings are known. The hidden cheat string is known. 46 hidden dev features discovered and wired into the trainer. 9 camera modes unlockable (including Ped Cam and Drone Cam). The wiki says dev mode is "broken on Steam" — the trainer bypasses this via Frida.
+**4 tabs:**
+- **Race** — auto-start race, finish race, cheat mode, fly mode, favorites
+- **Dev cheats** — 48 buttons across 13 groups with search filter, live state labels, powerup spawner with name dropdown
+- **Powerups** — 89-button grid with search, right-click to pin favorites
+- **Status** — connection state, advanced mode toggle
+
+**Features:**
+- Spawns or attaches to the game process
+- No-minimize on alt-tab (WndProc subclass)
+- Windowed mode toggle (Ctrl+Shift+W global hotkey)
+- Disabled-when-detached buttons, session loss detection with auto-reconnect
+- All cheats fire via hash injection on the game's own thread — no crashes
 
 ---
 
