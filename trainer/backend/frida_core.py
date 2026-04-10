@@ -121,17 +121,60 @@ def _get_steam_libraries(steam_path: str) -> list[str]:
     return libs
 
 
-def check_nglide(game_dir: str) -> bool:
-    """Check if nGlide is installed in the game folder.
-    nGlide's glide2x.dll is ~200KB+; the stock Steam wrapper is ~50KB."""
+def check_nglide(game_dir: str) -> dict:
+    """Check nGlide status in the game folder. Returns a dict with details.
+
+    The trainer's windowed toggle only works with nGlide 2.x+ which has the
+    WH_KEYBOARD hook with the Alt+Enter toggle mechanism. Older versions
+    (1.x, shipped with some Steam builds) don't support it.
+
+    Returns: {'found': bool, 'version': str, 'size': int, 'path': str, 'ok': bool}
+    """
+    result = {'found': False, 'version': '', 'size': 0, 'path': '', 'ok': False}
     if not game_dir:
-        return False
+        return result
     dll = os.path.join(game_dir, 'glide2x.dll')
     if not os.path.isfile(dll):
-        return False
-    # nGlide 2.x is typically 150KB-300KB; stock wrappers are much smaller
-    size = os.path.getsize(dll)
-    return size > 100_000  # >100KB = likely nGlide
+        return result
+    result['found'] = True
+    result['path'] = dll
+    result['size'] = os.path.getsize(dll)
+
+    # Try to read version info from the DLL
+    try:
+        import ctypes
+        size = ctypes.windll.version.GetFileVersionInfoSizeW(dll, None)
+        if size:
+            buf = ctypes.create_string_buffer(size)
+            ctypes.windll.version.GetFileVersionInfoW(dll, 0, size, buf)
+            # Read the root version block
+            p = ctypes.c_void_p()
+            l = ctypes.c_uint()
+            if ctypes.windll.version.VerQueryValueW(buf, '\\\\', ctypes.byref(p), ctypes.byref(l)):
+                import struct
+                info = ctypes.string_at(p.value, l.value)
+                if len(info) >= 48:
+                    ms, ls = struct.unpack_from('<II', info, 8)
+                    major = ms >> 16
+                    minor = ms & 0xffff
+                    result['version'] = f'{major}.{minor}'
+    except Exception:
+        pass
+
+    # nGlide 2.x has the windowed toggle (WH_KEYBOARD hook + Alt+Enter).
+    # Version 2.x DLLs are typically 150-300KB. Version 1.x is smaller.
+    # If we can't read the version, fall back to size heuristic.
+    if result['version']:
+        try:
+            major = int(result['version'].split('.')[0])
+            result['ok'] = major >= 2
+        except ValueError:
+            result['ok'] = result['size'] > 150_000
+    else:
+        # No version info — use size: nGlide 2.x > 150KB, 1.x < 100KB
+        result['ok'] = result['size'] > 150_000
+
+    return result
 
 
 def _get_process_path(pid: int) -> Optional[str]:

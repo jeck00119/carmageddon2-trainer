@@ -99,11 +99,22 @@ class MainWindow(QMainWindow):
         self.btn_toggle_window.clicked.connect(self.bridge.alt_enter)
         top_lay.addWidget(self.btn_toggle_window)
 
-        # Disable windowed controls if nGlide not detected
+        # Log nGlide status for debugging
+        info = self.bridge.nglide_info
+        print(f'[trainer] nGlide: found={info.get("found")} version={info.get("version")!r} '
+              f'size={info.get("size")} ok={info.get("ok")} path={info.get("path")!r}',
+              file=sys.stderr, flush=True)
+        print(f'[trainer] game path: {self.bridge.game_path}', file=sys.stderr, flush=True)
+
+        # Disable windowed controls if nGlide not compatible
         if not self.bridge.has_nglide:
             self.cb_windowed.setEnabled(False)
-            self.cb_windowed.setToolTip('nGlide not installed — windowed mode unavailable')
-            self.btn_toggle_window.setToolTip('nGlide not installed — windowed mode unavailable')
+            tip = 'nGlide not installed — windowed mode unavailable'
+            if info.get('found') and not info.get('ok'):
+                tip = (f'nGlide version too old ({info.get("version") or "unknown"}, '
+                       f'{info.get("size")} bytes) — need v2.0+ for windowed mode')
+            self.cb_windowed.setToolTip(tip)
+            self.btn_toggle_window.setToolTip(tip)
 
         # --- Tabs ---
         self.tabs = QTabWidget()

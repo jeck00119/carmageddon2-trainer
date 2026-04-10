@@ -54,7 +54,10 @@ class BackendBridge(QObject):
         game_exe = find_game(saved_path=saved or '')
         self._settings.setValue('game_exe', game_exe or '')  # always persist (clears stale paths)
 
-        self.has_nglide = check_nglide(os.path.dirname(game_exe)) if game_exe else False
+        # Check nGlide status — log details for debugging
+        nglide_info = check_nglide(os.path.dirname(game_exe)) if game_exe else {'ok': False}
+        self.has_nglide = nglide_info.get('ok', False)
+        self.nglide_info = nglide_info
 
         self.backend = Carma2Backend(
             on_event=self._on_event,
@@ -104,14 +107,11 @@ class BackendBridge(QObject):
         self.kbd_proc_captured.emit(self.kbd_proc_addr)
 
     def _handle_toggle_ready(self, e: dict):
-        self.log.emit('nGlide toggle ready')
+        self.log.emit('nGlide toggle addresses extracted — windowed toggle ready')
         self.toggle_ready.emit()
         if self.wants_windowed:
             self.wants_windowed = False
-            # Defer slightly so the game's render context is fully up.
-            # threading.Timer is used because this callback runs on the Frida
-            # thread, not Qt main; alt_enter ultimately calls PostMessageA
-            # which is thread-safe.
+            self.log.emit('Auto-toggling to windowed mode in 2s...')
             threading.Timer(2.0, self.alt_enter).start()
 
     def _handle_agent_log(self, e: dict):
@@ -138,14 +138,17 @@ class BackendBridge(QObject):
         self.backend.set_game_path(path)
         self._settings.setValue('game_exe', path)
         old_nglide = self.has_nglide
-        self.has_nglide = check_nglide(os.path.dirname(path))
+        self.nglide_info = check_nglide(os.path.dirname(path))
+        self.has_nglide = self.nglide_info.get('ok', False)
         if self.has_nglide != old_nglide:
             self.nglide_changed.emit(self.has_nglide)
         self.log.emit(f'Game path: {path}')
         return True
 
     def attach_or_spawn(self):
+        self.log.emit(f'attach_or_spawn: exe={self.backend.game_exe} nglide={self.has_nglide}')
         if self.backend.attach_running():
+            self.log.emit(f'attached to running process pid={self.backend.pid}')
             self.attached_changed.emit(True)
         elif not self.backend.game_exe:
             self.log.emit('Game not found — please set the path')
@@ -153,6 +156,7 @@ class BackendBridge(QObject):
         else:
             try:
                 self.backend.spawn()
+                self.log.emit(f'spawned pid={self.backend.pid}')
                 self.attached_changed.emit(True)
             except FileNotFoundError:
                 self.log.emit('Game EXE not found — please set the path')

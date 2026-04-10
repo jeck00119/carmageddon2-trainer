@@ -50,6 +50,21 @@ class StatusTab(QWidget):
         path_row.addWidget(btn_browse)
         conn.addRow('Game:', path_row)
 
+        # nGlide status
+        info = self.bridge.nglide_info
+        if info.get('ok'):
+            nglide_text = f'nGlide {info.get("version") or "?"} ({info.get("size", 0) // 1024}KB)'
+            nglide_style = 'color: #4ec27a;'
+        elif info.get('found'):
+            nglide_text = f'Old version ({info.get("version") or "?"}, {info.get("size", 0) // 1024}KB) — need v2.0+'
+            nglide_style = 'color: #e0b341;'
+        else:
+            nglide_text = 'Not installed — windowed mode unavailable'
+            nglide_style = 'color: #e85050;'
+        self.lbl_nglide = QLabel(nglide_text)
+        self.lbl_nglide.setStyleSheet(f'{nglide_style} font-size: 9pt;')
+        conn.addRow('nGlide:', self.lbl_nglide)
+
         self.cb_advanced = QCheckBox('Advanced / developer mode')
         self.cb_advanced.setToolTip(
             'Show internal debug info: live game state, full cheat table, '
