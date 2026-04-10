@@ -14,7 +14,7 @@ from PySide6.QtCore import QObject, QSettings, QThread, Signal
 
 from backend.cheat_db import load_cheat_table, powerups_only
 from backend.dev_actions import find_action
-from backend.frida_core import Carma2Backend, check_nglide, find_game
+from backend.frida_core import Carma2Backend, check_nglide, ensure_nglide, find_game
 
 _log = lambda msg: print(f'[bridge] {msg}', file=sys.stderr, flush=True)
 
@@ -58,7 +58,9 @@ class BackendBridge(QObject):
         game_exe = find_game(saved_path=saved or '')
         self._settings.setValue('game_exe', game_exe or '')
 
-        # Check nGlide status
+        # Ensure correct nGlide DLL is installed, then check status
+        if game_exe:
+            ensure_nglide(os.path.dirname(game_exe))
         nglide_info = check_nglide(os.path.dirname(game_exe)) if game_exe else {'ok': False}
         self.has_nglide = nglide_info.get('ok', False)
         self.nglide_info = nglide_info
@@ -161,6 +163,7 @@ class BackendBridge(QObject):
         self.backend.set_game_path(path)
         self._settings.setValue('game_exe', path)
         old_nglide = self.has_nglide
+        ensure_nglide(os.path.dirname(path))
         self.nglide_info = check_nglide(os.path.dirname(path))
         self.has_nglide = self.nglide_info.get('ok', False)
         if self.has_nglide != old_nglide:

@@ -31,6 +31,11 @@ KNOWN_EXE_MD5 = '66a9c49483ff4415b518bb7df01385bd'
 
 AGENT_JS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent.js')
 
+# Known good nGlide 2.60 build that has the WH_KEYBOARD hook for windowed toggle.
+# Bundled in trainer/deps/glide2x.dll. Smaller builds (e.g. 1,310,720) lack the toggle.
+KNOWN_NGLIDE_SIZE = 1630208
+NGLIDE_BUNDLED = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'deps', 'glide2x.dll')
+
 _log_stderr = lambda tag, msg: print(f'[{tag}] {msg}', file=sys.stderr, flush=True)
 
 
@@ -175,6 +180,49 @@ def check_nglide(game_dir: str) -> dict:
 
     _log_stderr('nglide', f'check result: {result}')
     return result
+
+
+def ensure_nglide(game_dir: str) -> bool:
+    """If the game folder has a wrong-sized glide2x.dll, replace it with our bundled copy.
+    Returns True if the DLL was replaced or already correct."""
+    if not game_dir:
+        return False
+    dst = os.path.join(game_dir, 'glide2x.dll')
+    bundled = os.path.abspath(NGLIDE_BUNDLED)
+
+    if not os.path.isfile(bundled):
+        _log_stderr('nglide', f'bundled DLL not found: {bundled}')
+        return False
+
+    bundled_size = os.path.getsize(bundled)
+    if bundled_size != KNOWN_NGLIDE_SIZE:
+        _log_stderr('nglide', f'bundled DLL unexpected size: {bundled_size}')
+        return False
+
+    if os.path.isfile(dst):
+        current_size = os.path.getsize(dst)
+        if current_size == KNOWN_NGLIDE_SIZE:
+            _log_stderr('nglide', 'correct DLL already installed')
+            return True
+        # Back up the old one
+        bak = dst + '.bak'
+        try:
+            import shutil
+            shutil.copy2(dst, bak)
+            _log_stderr('nglide', f'backed up old DLL ({current_size} bytes) to {bak}')
+        except Exception as e:
+            _log_stderr('nglide', f'backup failed: {e}')
+            return False
+
+    # Copy the bundled DLL
+    try:
+        import shutil
+        shutil.copy2(bundled, dst)
+        _log_stderr('nglide', f'installed bundled nGlide ({bundled_size} bytes) -> {dst}')
+        return True
+    except Exception as e:
+        _log_stderr('nglide', f'copy failed: {e}')
+        return False
 
 
 def _get_process_path(pid: int) -> Optional[str]:
