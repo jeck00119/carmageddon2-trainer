@@ -352,7 +352,7 @@ class Carma2Backend:
             return None
         try:
             return self.api.snap()
-        except (frida.InvalidOperationError, frida.TransportError) as e:
+        except Exception as e:
             self._log(f'snap() failed: {type(e).__name__}: {e}')
             return None
 

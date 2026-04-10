@@ -19,39 +19,6 @@
 function rd32(va) { try { return ptr(va).readU32(); } catch (e) { return 0xDEAD; } }
 function wr32(va, v) { try { ptr(va).writeU32(v); } catch (e) {} }
 
-// Pre-flight: verify a few known function prologues before hooking.
-// If the bytes don't match, the EXE is a different build and hooks will crash.
-function verifyAddresses() {
-    var checks = [
-        // [address, expected first bytes (hex string), label]
-        [VA.GET_CHEAT_HASH, '55',   'GetCheatInputHash'],  // push ebp
-        [VA.FN_CLEANUP,     '55',   'menu_cleanup'],
-        [VA.FN_INIT,        '55',   'menu_init'],
-    ];
-    var ok = true;
-    for (var i = 0; i < checks.length; i++) {
-        var addr = checks[i][0];
-        var expected = checks[i][1];
-        var label = checks[i][2];
-        try {
-            var actual = ptr(addr).readU8().toString(16);
-            if (actual !== expected) {
-                send({h: 'log', msg: 'ADDRESS MISMATCH: ' + label + ' @0x' +
-                    addr.toString(16) + ' byte=0x' + actual + ' expected=0x' + expected});
-                ok = false;
-            }
-        } catch (e) {
-            send({h: 'log', msg: 'ADDRESS UNREADABLE: ' + label + ' @0x' + addr.toString(16) + ': ' + e});
-            ok = false;
-        }
-    }
-    if (ok) {
-        send({h: 'log', msg: 'address verification: all OK'});
-    }
-    return ok;
-}
-var addressesOk = verifyAddresses();
-
 // ===========================================================================
 // Constants
 // ===========================================================================
@@ -170,6 +137,39 @@ var nglideTogglePending = NULL;     // ASLR-shifted addr of pending flag
 var injectArmed         = false;    // one-shot cheat hash override armed
 var injectH1            = 0;
 var injectH2            = 0;
+
+// ===========================================================================
+// Pre-flight: verify function prologues at hook addresses.
+// If bytes don't match, the EXE is a different build and hooks will crash.
+// ===========================================================================
+function verifyAddresses() {
+    var checks = [
+        [VA.GET_CHEAT_HASH, '55', 'GetCheatInputHash'],
+        [VA.FN_CLEANUP,     '55', 'menu_cleanup'],
+        [VA.FN_INIT,        '55', 'menu_init'],
+    ];
+    var ok = true;
+    for (var i = 0; i < checks.length; i++) {
+        var addr = checks[i][0];
+        var expected = checks[i][1];
+        var label = checks[i][2];
+        try {
+            var actual = ptr(addr).readU8().toString(16);
+            if (actual !== expected) {
+                send({h: 'log', msg: 'ADDRESS MISMATCH: ' + label + ' @0x' +
+                    addr.toString(16) + ' byte=0x' + actual + ' expected=0x' + expected});
+                ok = false;
+            }
+        } catch (e) {
+            send({h: 'log', msg: 'ADDRESS UNREADABLE: ' + label + ' @0x' +
+                addr.toString(16) + ': ' + e});
+            ok = false;
+        }
+    }
+    if (ok) send({h: 'log', msg: 'address verification: all OK'});
+    return ok;
+}
+var addressesOk = verifyAddresses();
 
 // ===========================================================================
 // nGlide WH_KEYBOARD toggle extraction
