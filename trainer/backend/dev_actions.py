@@ -4,8 +4,8 @@ Dev cheat action registry — declarative spec of every dev feature.
 The DevTab UI iterates this list and builds widgets via a generic factory.
 Adding a new dev feature is one entry here + one RPC in agent.js. No UI code.
 
-Labels verified 2026-04-10 via autonomous truth-table test (test_dev_truth.py).
-Each label matches the ACTUAL text the game renders when the fn fires.
+Labels verified 2026-04-10 via runtime truth-table test (fired each fn,
+captured the rendered text). Each label matches the actual game text.
 
 Requirements semantics:
 - 'attached'   — game must be attached
@@ -46,7 +46,11 @@ class Action:
 
 
 # ============================================================================
-# DEV CHEAT REGISTRY — verified 2026-04-10 via truth-table test
+# DEV CHEAT REGISTRY — runtime-verified 2026-04-10
+# These are the standard Carma2 dev/edit mode features (documented in the
+# Carmashit cheat executable article), accessed via direct function calls
+# after setting cheat_mode = 0xa11ee75d. This bypasses the typed-code
+# dispatcher which is broken on the Steam edition.
 # Order = display order. Group field controls grouping.
 # ============================================================================
 DEV_ACTIONS = [
@@ -124,13 +128,13 @@ DEV_ACTIONS = [
            rpc='gonad_of_death',
            tooltip='Cheat handler 0x444f10.'),
 
-    # ----- Lock-on targeting (NEW — discovered 2026-04-10 truth test) -----
+    # ----- Lock-on targeting (standard T/Y keys in normal play) -----
     Action('dev_q', 'Lock on target', group='lock-on',
-           tooltip='Verified: renders "LOCKED ONTO <opponent name>". Selects a target.'),
+           tooltip='Renders "LOCKED ONTO <opponent name>". Normally bound to T key in KEYMAP.'),
     Action('dev_w', 'Lock on (cycle)', group='lock-on',
-           tooltip='Verified: renders "LOCKED ONTO <different opponent>". Cycles target.'),
+           tooltip='Cycles lock-on target. Normally bound to Y key in KEYMAP.'),
 
-    # ----- Upgrade purchase (NEW — discovered 2026-04-10 truth test) -----
+    # ----- Upgrade purchase (standard buy system) -----
     Action('dev_slash', 'Buy upgrade: Armour', group='upgrades',
            tooltip='Reads credits from [0x75bb80] (NOT [0x676920]). '
                    'Cost = 50000. Renders "CAN\'T AFFORD IT" or upgrades [0x75d4d4].'),
@@ -191,7 +195,7 @@ DEV_ACTIONS = [
                    'One-shot sets mystery flag [0x75bc04]=1. Plays FlaskGone.WAV. '
                    'ONLY works from MENU (not in race).'),
 
-    # ----- AI debug (discovered 2026-04-10 — triggers opponent AI logging) -----
+    # ----- AI debug (triggers opponent AI logging) -----
     Action('visual_toggle_9', 'AI debug log', group='ai debug',
            tooltip='Verified: triggers opponent AI messages like '
                    '"JENNY TAYLIA: Ha! Bet you weren\'t expecting that!"'),

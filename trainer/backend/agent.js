@@ -50,13 +50,13 @@ var MENU_OFF_TARGET  = 0x138;
 var MENU_OFF_TYPE    = 0x13c;
 
 // ===========================================================================
-// DEV CHEAT SYSTEM (discovered 2026-04-10)
+// DEV CHEAT SYSTEM — runtime addresses for the Steam binary
 // ---------------------------------------------------------------------------
-// All these are gated by [0x68b8e0] == 0xa11ee75d. Set DEV.MODE_VALUE to
-// unlock; functions then run when called directly. Many are reachable from
-// the polled-table dispatcher at 0x442e90 too, but direct calls bypass the
-// edge-trigger requirement.
-// See memory/project_dev_menu_discovery.md for the full reverse-engineering.
+// These are the standard Carma2 dev/edit mode features (documented in the
+// Carmashit cheat executable article). On the Steam edition, the typed-code
+// dispatcher is broken, so the trainer unlocks the system via direct memory
+// write: [0x68b8e0] = 0xa11ee75d, then calls the functions directly.
+// Many are also reachable via the polled-table dispatcher at 0x442e90.
 // ===========================================================================
 var DEV = {
     // The magic value that unlocks the dev cheat system

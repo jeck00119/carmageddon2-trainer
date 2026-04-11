@@ -1,20 +1,27 @@
 # Carmageddon 2 Trainer
 
 A Frida-based runtime trainer for Carmageddon 2 (Steam build, `CARMA2_HW.EXE`).
-Hooks the live game and calls its internal cheat dispatcher directly — no key
-simulation, no save-file editing, no game-file modification.
+**Re-enables the dev/edit mode that's broken on the Steam edition** via runtime
+memory hooking — no binary patching, no save-file editing, no typed cheat codes.
+
+The dev features themselves (damage cycler, credits ops, fly mode, edit mode,
+camera cycler, etc.) are publicly documented in the [Carmashit cheat executable
+article](https://razor.cwaboard.co.uk/2022/06/20/carmageddon-2-carmashit-cheat-executable-functions/)
+and the [Carmageddon wiki](https://wiki.cwaboard.co.uk/wiki/Cheats). This trainer
+just makes them accessible on Steam where the typed-code dispatcher is broken.
 
 ## What it does
 
 - **Auto-start race** — skips menus, drops you straight into a race
-- **Fire any cheat** — all 94 cheat strings are known. Every powerup effect
-  is documented (0 unknowns remaining).
-- **48 hidden dev cheats** — discovered via static analysis +
-  autonomous Frida probing. Includes instant repair, damage cycler (god mode),
-  credit ops (+/- 2k/5k or set arbitrary), teleport, gravity toggle, timer
-  freeze, HUD/MiniMap toggles, spectator camera, lock-on targeting, checkpoint
-  finder, upgrade purchases, camera mode unlock (9 modes including Ped Cam
-  and Drone Cam), powerup spawner, and more. See "Dev cheats" tab.
+- **One-click cheat firing** — fires any of the 94 cheat strings via hash
+  injection (hooks `GetCheatInputHash` and overrides the hash buffer before
+  `CheatDetect` reads it). No typing required.
+- **48 dev cheat functions** wired to buttons, organized into 13 groups:
+  instant repair, damage cycler (god mode), credit ops, teleport, gravity
+  toggle, timer freeze, HUD/MiniMap toggles, spectator camera, lock-on
+  targeting, checkpoint finder, upgrade purchases, camera mode cycler
+  (including Ped Cam / Drone Cam via flag-array writes), powerup spawner.
+  All 48 runtime-verified on the retail Steam binary.
 - **No minimize on alt-tab** — game stays visible when you switch windows
 - **Windowed-mode toggle** — Ctrl+Shift+W global hotkey, in-bar button, or auto-on-spawn checkbox
 - **Pinnable favorites** — right-click any powerup to pin it to the Race tab
@@ -42,7 +49,7 @@ time, regardless of which window has focus.
   - **RACE FLOW**: Auto-start race · Finish race · Enable cheat mode
   - **SPECIAL CHEATS**: Fly mode · Gonad of death (non-powerup actions)
   - **FAVORITES**: dynamic group of user-pinned powerups. Right-click any powerup in the Powerups tab to pin/unpin.
-- **Dev cheats** — 48 hidden developer features dispatched by setting `cheat_mode = 0xa11ee75d` and calling polled-table functions directly. Groups: dev mode toggle · player actions · credits ops · powerups spawner · movement · opponents cycler · spectator camera · HUD/display · sound · misc · experimental. Live state for credits, damage state, gravity, HUD mode, spectator state. **Enable Dev Mode first** or nothing else fires.
+- **Dev cheats** — 48 developer features dispatched by setting `cheat_mode = 0xa11ee75d` at `[0x68b8e0]` and calling the polled-table functions directly (bypassing the broken typed-code path on Steam). Groups: dev mode toggle · player actions · credits ops · powerups spawner · movement · lock-on · upgrades · spectator camera · HUD/display · sound · hidden · AI debug · misc. Live state for credits, damage, gravity, HUD mode, spectator, shadows, zoom. **Enable Dev Mode first** or nothing else fires.
 - **Powerups** — grid of all 89 spawn-powerup cheats with search filter. Right-click for the pin/unpin context menu. Pinned powerups get a Carma-red border.
 - **Status** — connection state, force-reattach, About text, and an **Advanced / developer mode** toggle.
 - **All cheats** *(only visible in Advanced mode)* — full 94-entry table view with handler/arg columns.
@@ -128,3 +135,21 @@ Stored via `QSettings('carma2_tools', 'trainer')` (Windows registry):
 3. Add a thin Python wrapper in `frida_core.py` (one liner via `_rpc()`)
 4. Add an `Action(...)` row to `dev_actions.py`
 5. Restart the trainer — the DevTab picks it up automatically (no UI code)
+
+## Credits & sources
+
+The dev/edit mode features exposed by this trainer are documented publicly:
+
+- [Carmashit cheat executable functions](https://razor.cwaboard.co.uk/2022/06/20/carmageddon-2-carmashit-cheat-executable-functions/) — razor.cwaboard.co.uk — the definitive documentation of Carma2's dev mode (Carmashit was a mid-development build with all edit modes pre-enabled).
+- [Carmageddon wiki (cwaboard)](https://wiki.cwaboard.co.uk/wiki/Cheats) — cheat strings, effects, controls.
+- [Carmageddon fandom wiki](https://carmageddon.fandom.com/) — features, camera modes, Wrecks Gallery, unused content.
+- [Unused content from Carmageddon II](https://wiki.cwaboard.co.uk/wiki/Unused_content_from_Carmageddon_II:_Carpocalypse_Now) — Ped Cam / Drone Cam references.
+
+**What this project adds on top:**
+- Re-enables the dev mode on the retail Steam edition (where the typed-code
+  path is broken per community reports — GOG edition works normally).
+- Runtime-verified memory addresses for the Steam binary
+  (MD5 `66a9c49483ff4415b518bb7df01385bd`).
+- Hash injection technique for one-click cheat firing without typing.
+- Runtime extraction of nGlide's windowed-toggle flag addresses.
+- PySide6 GUI organized into 13 dev cheat groups with live state display.
