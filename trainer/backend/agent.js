@@ -603,12 +603,8 @@ rpc.exports = {
 
     // HUD / display
     hudCycle:         function () { return callDev(DEV.FN_HUD_CYCLE); },
-    minimapToggle:    function () { return callDev(DEV.FN_MINIMAP_TOGGLE); },
     shadowToggle:     function () { return callDev(DEV.FN_SHADOW_TOGGLE); },
     shadow3State:     function () { return callDev(DEV.FN_SHADOW_3STATE); },
-    zoomIncr:         function () { return callDev(DEV.FN_ZOOM_INCR); },
-    zoomDecr:         function () { return callDev(DEV.FN_ZOOM_DECR); },
-    cameraStep:       function () { return callDev(DEV.FN_CAMERA_STEP); },
 
     // Spectator camera
     spectatorToggle:  function () { return callDev(DEV.FN_SPECTATOR_TOGGLE); },
@@ -625,13 +621,10 @@ rpc.exports = {
     resetSoundState:  function () { return callDev(DEV.FN_RESET_SOUND_STATE); },
 
     // Sound / misc
-    soundSubsystem:   function () { return callDev(DEV.FN_SOUND_SUBSYS); },
     simpleToggle:     function () { return callDev(DEV.FN_SIMPLE_TOGGLE); },
     devMenuCycle:     function () { return callDev(DEV.FN_DEV_MENU); },
-    recoveryCost:     function () { return callDev(DEV.FN_RECOVERY_COST); },
 
-    // Visual toggles (return key + modifier variants)
-    visualToggle7:    function () { return callDev(DEV.FN_VISUAL_TOGGLE_7); },
+    // AI debug (triggers opponent AI log messages)
     visualToggle9:    function () { return callDev(DEV.FN_VISUAL_TOGGLE_9); },
 
     // Misc dev
@@ -669,13 +662,8 @@ rpc.exports = {
         return 'armed (menu only)';
     },
 
-    // Experimental / unmapped (raw fn calls)
+    // AI state checker
     devCheck9:        function () { return callDev(DEV.FN_DEV_CHECK_9); },
-    devSlash:         function () { return callDev(DEV.FN_DEV_SLASH); },
-    devSemi:          function () { return callDev(DEV.FN_DEV_SEMI); },
-    devPeriod:        function () { return callDev(DEV.FN_DEV_PERIOD); },
-    devQ:             function () { return callDev(DEV.FN_DEV_Q); },
-    devW:             function () { return callDev(DEV.FN_DEV_W); },
 
 };
 

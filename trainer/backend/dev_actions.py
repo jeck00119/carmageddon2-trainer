@@ -128,21 +128,6 @@ DEV_ACTIONS = [
            rpc='gonad_of_death',
            tooltip='Cheat handler 0x444f10.'),
 
-    # ----- Lock-on targeting (standard T/Y keys in normal play) -----
-    Action('dev_q', 'Lock on target', group='lock-on',
-           tooltip='Renders "LOCKED ONTO <opponent name>". Normally bound to T key in KEYMAP.'),
-    Action('dev_w', 'Lock on (cycle)', group='lock-on',
-           tooltip='Cycles lock-on target. Normally bound to Y key in KEYMAP.'),
-
-    # ----- Upgrade purchase (standard buy system) -----
-    Action('dev_slash', 'Buy upgrade: Armour', group='upgrades',
-           tooltip='Reads credits from [0x75bb80] (NOT [0x676920]). '
-                   'Cost = 50000. Renders "CAN\'T AFFORD IT" or upgrades [0x75d4d4].'),
-    Action('dev_semi', 'Buy upgrade: Power', group='upgrades',
-           tooltip='Same system — buys power upgrade from [0x75bb80] credits.'),
-    Action('dev_period', 'Buy upgrade: Offensive', group='upgrades',
-           tooltip='Same system — buys offensive upgrade from [0x75bb80] credits.'),
-
     # ----- Spectator camera (VERIFIED) -----
     Action('spectator_toggle', 'Spectator camera', group='spectator',
            kind='cycler', state_key='spec_active',
@@ -175,17 +160,7 @@ DEV_ACTIONS = [
            tooltip='Cycles through enabled camera modes (4 default, 9 after unlock). '
                    'Requires in-race state — crashes otherwise.'),
 
-    Action('minimap_toggle', 'MiniMap toggle', group='hud',
-           tooltip='Sound 8005 confirmed. Visual effect not captured in snap.'),
-
-    Action('recovery_cost', 'Recovery Cost display', group='hud',
-           tooltip='Verified: renders "Recovery Cost: 1000".'),
-
     # ----- Sound / state -----
-    Action('sound_subsystem', 'Sound subsystem toggle', group='sound',
-           kind='cycler', state_key='sound_master',
-           state_labels=['OFF (muted)', 'ON'],
-           tooltip='Verified: toggles [0x762328] sound_master + [0x7a06c0] cd_audio.'),
     Action('reset_sound_state', 'Reset sound state', group='sound',
            tooltip='Restores 12-byte state from defaults.'),
     Action('quick_save', 'Quick-save snapshot', group='sound',
@@ -207,13 +182,10 @@ DEV_ACTIONS = [
     Action('dev_check_9', 'AI state checker', group='ai debug',
            tooltip='Triggers with specific F12 mode.'),
 
-    # ----- Misc (sound-only or no visible effect in trace) -----
+    # ----- Misc -----
     Action('simple_toggle', 'Simple flag set', group='misc',
            tooltip='Effect unknown. One-shot sets [0x74d1a0]=1. Bound to '
                    '8 key in dev mode. Kept for completeness.'),
-    Action('visual_toggle_7', 'Checkpoint finder toggle', group='misc',
-           tooltip='Verified: string IDs 254/255 = "CHECKPOINT FINDER TURNED OFF/ON". '
-                   'Shows path to next checkpoint.'),
     Action('shadow_toggle', 'Shadow type', group='misc',
            kind='cycler', state_key='shadow_type',
            state_labels=['Translucent', 'Solid'],
@@ -222,15 +194,6 @@ DEV_ACTIONS = [
            kind='cycler', state_key='shadow_3st',
            state_labels=['mode 0', 'mode 1', 'mode 2', 'mode 3'],
            tooltip='Verified: cycles [0x65fdc8] 0..3.'),
-    Action('zoom_incr', 'Zoom / LOD +', group='misc',
-           kind='cycler', state_key='zoom_lod',
-           state_labels=[str(i) for i in range(9)],
-           tooltip='Verified: increments [0x68be38] (0..8).'),
-    Action('zoom_decr', 'Zoom / LOD -', group='misc',
-           tooltip='Decrements [0x68be38].'),
-    Action('camera_step', 'Camera step', group='misc',
-           requires=('attached', 'dev_mode', 'in_race'),
-           tooltip='Increments camera position counter. Needs in-race (cam_max=0 in menu).'),
     Action('demo_file_load', 'Load DEMOFILE.TXT', group='misc',
            tooltip='Loads demo file from disk. File does not exist in retail — no effect.'),
     Action('item_next', 'Opponent next', group='misc',
@@ -250,8 +213,6 @@ GROUP_ORDER = [
     'credits',
     'powerups',
     'movement',
-    'lock-on',
-    'upgrades',
     'spectator',
     'hud',
     'main menu',

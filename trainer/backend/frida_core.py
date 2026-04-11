@@ -380,12 +380,8 @@ class Carma2Backend:
     def item_sort(self) -> str: return self._rpc('item_sort')
 
     def hud_cycle(self) -> str: return self._rpc('hud_cycle')
-    def minimap_toggle(self) -> str: return self._rpc('minimap_toggle')
     def shadow_toggle(self) -> str: return self._rpc('shadow_toggle')
     def shadow_3state(self) -> str: return self._rpc('shadow3_state')
-    def zoom_incr(self) -> str: return self._rpc('zoom_incr')
-    def zoom_decr(self) -> str: return self._rpc('zoom_decr')
-    def camera_step(self) -> str: return self._rpc('camera_step')
 
     def spectator_toggle(self) -> str: return self._rpc('spectator_toggle')
     def spectator_next(self) -> str: return self._rpc('spectator_next')
@@ -394,12 +390,9 @@ class Carma2Backend:
     def quick_save(self) -> str: return self._rpc('quick_save')
     def reset_sound_state(self) -> str: return self._rpc('reset_sound_state')
 
-    def sound_subsystem(self) -> str: return self._rpc('sound_subsystem')
     def simple_toggle(self) -> str: return self._rpc('simple_toggle')
     def dev_menu_cycle(self) -> str: return self._rpc('dev_menu_cycle')
-    def recovery_cost(self) -> str: return self._rpc('recovery_cost')
 
-    def visual_toggle_7(self) -> str: return self._rpc('visual_toggle7')
     def visual_toggle_9(self) -> str: return self._rpc('visual_toggle9')
 
     def lighting_profiler(self) -> str: return self._rpc('lighting_profiler')
@@ -409,11 +402,6 @@ class Carma2Backend:
     def unlock_all_cameras(self) -> str: return self._rpc('unlock_all_cameras')
 
     def dev_check_9(self) -> str: return self._rpc('dev_check_9')
-    def dev_slash(self) -> str: return self._rpc('dev_slash')
-    def dev_semi(self) -> str: return self._rpc('dev_semi')
-    def dev_period(self) -> str: return self._rpc('dev_period')
-    def dev_q(self) -> str: return self._rpc('dev_q')
-    def dev_w(self) -> str: return self._rpc('dev_w')
 
     # ----- high-level macros -----
 
