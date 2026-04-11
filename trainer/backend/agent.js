@@ -85,7 +85,6 @@ var DEV = {
     FN_TELEPORT:          0x4b5ab0, // F3 mask=4  (reset car position)
     FN_GRAVITY_TOGGLE:    0x444350, // toggles GRAVITY, prints "We have lift off!!" / "Back down to Earth"
     FN_GRAVITY_STATE:     0x4443c0, // gravity state reader (in-race maintenance)
-    FN_MINIMAP_TOGGLE:    0x4420e0, // key 'j'
     FN_HUD_CYCLE:         0x444f40, // F12 (HUD_MODE cycler 0..5)
     FN_DEV_MENU:          0x4414b0, // F1 (Edit mode: Options ↔ Cheat)
     FN_SPECTATOR_TOGGLE:  0x4da9d0, // Tab
@@ -98,21 +97,10 @@ var DEV = {
     FN_SHADOW_3STATE:     0x4e9960, // F5 mask=4 (3-state cycler)
     FN_RESET_SOUND_STATE: 0x502e00, // F2 mask=1
     FN_QUICK_SAVE:        0x5032a0, // F7 mask=4
-    FN_ZOOM_INCR:         0x4e4cd0, // 'y'  (camera/zoom 0..8 increment)
-    FN_ZOOM_DECR:         0x4e4d00, // 'z'  (decrement)
-    FN_CAMERA_STEP:       0x40e430, // 'print sc'
-    FN_VISUAL_TOGGLE_7:   0x494840, // 'return'+'7' modifier
-    FN_VISUAL_TOGGLE_9:   0x494880, // 'return'+'9' modifier
-    FN_DEV_CHECK_9:       0x40e900, // '9'
-    FN_DEV_SLASH:         0x502e50, // '/'
-    FN_DEV_SEMI:          0x502fd0, // ';'
-    FN_DEV_PERIOD:        0x503030, // '.'
-    FN_DEV_Q:             0x4945f0, // 'q'
-    FN_DEV_W:             0x494700, // 'w'
-    FN_RECOVERY_COST:     0x442300, // 'o' (recovery cost editor)
-    FN_SOUND_SUBSYS:      0x455a50, // 'p' (toggle_sound_subsystem)
-    FN_SIMPLE_TOGGLE:     0x441490, // '8'
-    FN_LIGHTING_PROFILER: 0x444ed0, // F12 secondary
+    FN_VISUAL_TOGGLE_9:   0x494880, // AI debug log trigger
+    FN_DEV_CHECK_9:       0x40e900, // '9' — AI state checker
+    FN_SIMPLE_TOGGLE:     0x441490, // '8' — effect unknown
+    FN_LIGHTING_PROFILER: 0x444ed0, // camera mode cycler (historical name)
     FN_GONAD_OF_DEATH:    0x444f10,
     FN_DEMOFILE_LOAD:     0x445000,
 
@@ -518,11 +506,9 @@ rpc.exports = {
             spec_active:  rd32(DEV.SPEC_FLAG),
             spec_index:   rd32(DEV.SPEC_INDEX),
             sel_dev:      rd32(DEV.SEL_DEV),
-            // Extended state (verified 2026-04-10 — all 14 "no-effect" actions DO change these)
-            sound_master: rd32(0x762328),
+            // Extended state for cycler live labels
             shadow_type:  rd32(0x6a23d8),
             shadow_3st:   rd32(0x65fdc8),
-            zoom_lod:     rd32(0x68be38),
             item_count:   rd32(0x7447d4),
             item_index:   rd32(0x7447f0),
         };
