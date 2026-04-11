@@ -7,9 +7,12 @@ from PySide6.QtWidgets import (QCheckBox, QFileDialog, QFormLayout, QGroupBox,
 
 MENU_NAMES = {
     0x5a80f0: 'Main menu',
+    0x5b39b8: 'Network menu',
     0x5bf280: 'New Game menu',
     0x59c828: 'In race (StartGame)',
+    0x632c60: 'Options menu',
     0x649df0: 'Quit menu',
+    0x5d6410: 'Change Car menu',
 }
 
 
@@ -93,12 +96,15 @@ class StatusTab(QWidget):
         info = QVBoxLayout(info_box)
         info_text = QLabel(
             '<b>Carmageddon 2 Trainer</b><br><br>'
-            'Frida-based runtime trainer. Hooks the live game and calls '
-            'its internal cheat dispatcher directly — no key simulation, '
-            'no save-file editing.<br><br>'
-            'Cheat strings are reverse-engineered from the binary; '
-            'unnamed cheats still work because we know the (h1, h2) hash '
-            'of every table entry.'
+            'Re-enables the dev/edit mode that\'s broken on the Steam edition. '
+            'Hooks the live game via runtime memory instrumentation — no binary '
+            'patching, no save-file editing, no typed cheat codes.<br><br>'
+            'The dev features themselves are publicly documented in the '
+            '<i>Carmashit cheat executable</i> article and on the Carmageddon '
+            'wiki; this trainer just makes them accessible on Steam where '
+            'the typed-code path no longer works.<br><br>'
+            'Cheats are fired by injecting the game\'s own cheat hash '
+            'dispatcher — one click fires any of the 94 cheats without typing.'
         )
         info_text.setWordWrap(True)
         info.addWidget(info_text)

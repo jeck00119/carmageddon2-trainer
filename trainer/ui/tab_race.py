@@ -31,9 +31,15 @@ class RaceTab(QWidget):
         flow.addWidget(self.btn_auto, 0, 0, 1, 2)
 
         self.btn_finish = self._mk_named('Finish race', 'SMARTBASTARD')
+        self.btn_finish.setToolTip('Fires SMARTBASTARD — instantly completes '
+                                    'the current race. Shows the Wrecks Gallery.')
         flow.addWidget(self.btn_finish, 1, 0)
 
         self.btn_cheat_mode = self._mk_named('Enable cheat mode', 'LAPMYLOVEPUMP')
+        self.btn_cheat_mode.setToolTip(
+            'Fires LAPMYLOVEPUMP — enables typed-code cheats (so you can type '
+            'cheats directly in-game). Different from Dev mode — for the Dev '
+            'cheats tab buttons, use "Enable dev mode" there instead.')
         flow.addWidget(self.btn_cheat_mode, 1, 1)
 
         layout.addWidget(flow_box)

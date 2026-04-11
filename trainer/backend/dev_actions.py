@@ -162,14 +162,18 @@ DEV_ACTIONS = [
 
     Action('unlock_all_cameras', 'Unlock all 9 cameras', group='hud',
            requires=('attached',),
-           tooltip='Enables all 9 camera modes: Standard, Panning, Action-tracking, Manual, '
-                   'Rigid, Ped Cam, Drone Cam, Reversing, Internal. Writes flag arrays at '
-                   '0x58f600/0x58f610. Default: only 4 of 9 enabled.'),
+           tooltip='Enables all 9 camera modes, including the documented-but-unused '
+                   'Ped Cam and Drone Cam (referenced in TEXT.TXT lines 268-269). '
+                   'Modes: Standard, Panning, Action-tracking, Manual, Rigid, '
+                   'Ped Cam, Drone Cam, Reversing, Internal. Writes flag arrays '
+                   'at 0x58f600/0x58f610.'),
 
+    # NOTE: internal name is 'lighting_profiler' but the function at that VA
+    # actually drives the camera mode cycler at runtime. Name kept for history.
     Action('lighting_profiler', 'Camera mode cycler', group='hud',
            requires=('attached', 'dev_mode', 'in_race'),
            tooltip='Cycles through enabled camera modes (4 default, 9 after unlock). '
-                   'Crashes outside race.'),
+                   'Requires in-race state — crashes otherwise.'),
 
     Action('minimap_toggle', 'MiniMap toggle', group='hud',
            tooltip='Sound 8005 confirmed. Visual effect not captured in snap.'),
@@ -188,12 +192,13 @@ DEV_ACTIONS = [
            requires=('attached', 'dev_mode', 'in_race'),
            tooltip='Crashes outside race (NULL struct at [0x762438]+0x210).'),
 
-    # ----- Hidden cheat (menu only) -----
-    Action('hidden_cheat', 'Hidden cheat (sound toggle)', group='hidden',
+    # ----- Main menu cheat (MWUCUZYSFUYHTQWXEPVU — documented effect) -----
+    Action('hidden_cheat', 'Unlock all cars & races', group='main menu',
            requires=('attached',),
-           tooltip='Verified: toggles sound_master [0x762328] and cd_audio [0x7a06c0]. '
-                   'One-shot sets mystery flag [0x75bc04]=1. Plays FlaskGone.WAV. '
-                   'ONLY works from MENU (not in race).'),
+           tooltip='Unlocks all cars and all races (except Ron Dumpster). '
+                   'Plays FlaskGone.WAV for audible confirmation. '
+                   'ONLY fires from the main menu (not in race). '
+                   'Internal: MWUCUZYSFUYHTQWXEPVU — sets flag [0x75bc04]=1.'),
 
     # ----- AI debug (triggers opponent AI logging) -----
     Action('visual_toggle_9', 'AI debug log', group='ai debug',
@@ -204,7 +209,8 @@ DEV_ACTIONS = [
 
     # ----- Misc (sound-only or no visible effect in trace) -----
     Action('simple_toggle', 'Simple flag set', group='misc',
-           tooltip='One-shot sets [0x74d1a0]=1. Not a toggle — stays set.'),
+           tooltip='Effect unknown. One-shot sets [0x74d1a0]=1. Bound to '
+                   '8 key in dev mode. Kept for completeness.'),
     Action('visual_toggle_7', 'Checkpoint finder toggle', group='misc',
            tooltip='Verified: string IDs 254/255 = "CHECKPOINT FINDER TURNED OFF/ON". '
                    'Shows path to next checkpoint.'),
@@ -248,7 +254,7 @@ GROUP_ORDER = [
     'upgrades',
     'spectator',
     'hud',
-    'hidden',
+    'main menu',
     'sound',
     'ai debug',
     'misc',
