@@ -8,6 +8,7 @@ worker so the UI stays responsive.
 import os
 import sys
 import threading
+import time
 import traceback
 
 from PySide6.QtCore import QObject, QSettings, QThread, Signal
@@ -190,10 +191,19 @@ class BackendBridge(QObject):
 
     # ----- fire-and-forget ops -----
 
+    _RPC_COOLDOWN = 0.3  # seconds between RPC calls (prevents game hangs)
+    _last_rpc_time = 0.0
+
     def _safe_call(self, op_label: str, fn, *args, log_success: bool = True):
         if not self.is_attached():
             self._emit_log(f'{op_label}: not attached')
             return None
+        # Enforce cooldown between rapid calls
+        now = time.monotonic()
+        elapsed = now - self._last_rpc_time
+        if elapsed < self._RPC_COOLDOWN:
+            time.sleep(self._RPC_COOLDOWN - elapsed)
+        self._last_rpc_time = time.monotonic()
         try:
             result = fn(*args)
             if log_success:
