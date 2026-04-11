@@ -17,3 +17,11 @@ Thumbs.db
 
 # Extracted game data (regenerable from DATA.TWT)
 powerup.txt
+
+# Local diagnostic tools — not part of the trainer release
+d3d_probe.py
+d3d_probe_agent.js
+d3d_crashcatch.py
+d3d_crashcatch_agent.js
+dgvoodoo_test/
+trainer/test_spawn_dgvoodoo.py
