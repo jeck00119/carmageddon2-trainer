@@ -32,6 +32,15 @@ AGENT_JS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent.js')
 KNOWN_NGLIDE_SIZE = 1630208
 NGLIDE_BUNDLED = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'deps', 'glide2x.dll')
 
+DGVOODOO_BUNDLED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'deps', 'dgvoodoo')
+DGVOODOO_FILES = [
+    ('Glide.dll',       'glide.dll'),
+    ('Glide2x.dll',     'glide2x.dll'),
+    ('Glide3x.dll',     'glide3x.dll'),
+    ('dgVoodoo.conf',   'dgVoodoo.conf'),
+    ('dgVoodooCpl.exe', 'dgVoodooCpl.exe'),
+]
+
 # Detect dgVoodoo 2's glide2x.dll so we don't replace it with nGlide.
 # dgVoodoo's Glide2x.dll is ~200 KB and contains the literal "dgVoodoo" in its
 # VERSIONINFO block as a UTF-16 string. Use a size-range + wide-string magic
@@ -197,6 +206,62 @@ def ensure_nglide(game_dir: str) -> bool:
 
     try:
         shutil.copy2(bundled, dst)
+        return True
+    except Exception:
+        return False
+
+
+def ensure_dgvoodoo(game_dir: str) -> bool:
+    """Install the bundled dgVoodoo 2 Glide wrapper into the game folder.
+
+    dgVoodoo 2 fixes windowed mode, Alt+Enter, Alt+Tab and focus-loss
+    handling for Carmageddon 2, which nGlide does not. On first run the
+    trainer copies the bundled Glide DLLs + conf + control panel into the
+    game folder, backing up any existing glide*.dll to glide*.dll.bak_nglide.
+
+    Idempotent: if the installed glide2x.dll already matches the bundled
+    version (by dgVoodoo signature), does nothing and returns True.
+    """
+    if not game_dir or not os.path.isdir(game_dir):
+        return False
+    src_dir = os.path.abspath(DGVOODOO_BUNDLED_DIR)
+    if not os.path.isdir(src_dir):
+        return False
+
+    # Verify the bundle is complete before touching anything
+    for src_name, _ in DGVOODOO_FILES:
+        if not os.path.isfile(os.path.join(src_dir, src_name)):
+            return False
+
+    # Already installed? Check glide2x.dll signature.
+    dst_glide2x = os.path.join(game_dir, 'glide2x.dll')
+    if _is_dgvoodoo_glide(dst_glide2x):
+        # Still copy conf + CPL if missing (user may have removed them)
+        for src_name, dst_name in DGVOODOO_FILES:
+            dst = os.path.join(game_dir, dst_name)
+            if not os.path.isfile(dst):
+                try:
+                    shutil.copy2(os.path.join(src_dir, src_name), dst)
+                except Exception:
+                    pass
+        return True
+
+    # Fresh install — back up any existing glide*.dll (likely nGlide)
+    for glide_name in ('glide.dll', 'glide2x.dll', 'glide3x.dll'):
+        existing = os.path.join(game_dir, glide_name)
+        if os.path.isfile(existing):
+            backup = existing + '.bak_nglide'
+            if not os.path.isfile(backup):
+                try:
+                    shutil.copy2(existing, backup)
+                except Exception:
+                    pass
+
+    # Copy the bundle
+    try:
+        for src_name, dst_name in DGVOODOO_FILES:
+            shutil.copy2(os.path.join(src_dir, src_name),
+                         os.path.join(game_dir, dst_name))
         return True
     except Exception:
         return False

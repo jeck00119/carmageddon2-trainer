@@ -15,7 +15,9 @@ from PySide6.QtCore import QObject, QSettings, QThread, Signal
 
 from backend.cheat_db import load_cheat_table, powerups_only
 from backend.dev_actions import find_action
-from backend.frida_core import Carma2Backend, check_nglide, ensure_nglide, find_game
+from backend.frida_core import (
+    Carma2Backend, check_nglide, ensure_dgvoodoo, ensure_nglide, find_game,
+)
 
 DEFAULT_FAVORITES = ['WHIZZ', 'MINGMING', 'WETWET', 'BIGTWAT', 'MOONINGMINNIE']
 
@@ -49,7 +51,10 @@ class BackendBridge(QObject):
         self._settings.setValue('game_exe', game_exe or '')
 
         if game_exe:
-            ensure_nglide(os.path.dirname(game_exe))
+            # Prefer dgVoodoo 2 (proper windowed / Alt+Tab). Falls back to
+            # the bundled nGlide only if the dgVoodoo bundle is missing.
+            if not ensure_dgvoodoo(os.path.dirname(game_exe)):
+                ensure_nglide(os.path.dirname(game_exe))
         nglide_info = check_nglide(os.path.dirname(game_exe)) if game_exe else {'ok': False}
         self.has_nglide = nglide_info.get('ok', False)
         self.nglide_info = nglide_info
@@ -144,7 +149,8 @@ class BackendBridge(QObject):
         self.backend.set_game_path(path)
         self._settings.setValue('game_exe', path)
         old_nglide = self.has_nglide
-        ensure_nglide(os.path.dirname(path))
+        if not ensure_dgvoodoo(os.path.dirname(path)):
+            ensure_nglide(os.path.dirname(path))
         self.nglide_info = check_nglide(os.path.dirname(path))
         self.has_nglide = self.nglide_info.get('ok', False)
         if self.has_nglide != old_nglide:

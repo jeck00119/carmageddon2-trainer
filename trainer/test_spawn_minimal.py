@@ -3,15 +3,14 @@
 test_spawn_minimal.py — spawn Carma2 with a MINIMAL Frida agent that has only:
   - DInput non-exclusive cooperative level
   - WH_KEYBOARD_LL install blocker
-  - dgVoodoo glide2x.dll detector (leaves it alone if present)
 
-Purpose: verify whether those two hooks alone give us working Alt+Tab when
-combined with dgVoodoo 2 as the Glide wrapper.
+Purpose: verify that those two hooks alone give us working Alt+Tab when
+combined with dgVoodoo 2 as the Glide wrapper. Used to isolate the fix
+from the rest of the trainer's agent.js (which has extra nGlide-specific
+hooks that crash when dgVoodoo is the active Glide wrapper).
 
-Prerequisite: dgVoodoo 2 must already be installed in the game folder
-(replace glide2x.dll/glide.dll/glide3x.dll with dgVoodoo's 3Dfx/x86/*.dll,
-drop dgVoodoo.conf into the game folder, set FullScreenMode = false and
-WindowedAttributes = borderless).
+dgVoodoo 2 is auto-installed from trainer/deps/dgvoodoo/ on first run;
+any existing nGlide files are backed up to *.bak_nglide.
 
 Usage:
     py -3 trainer/test_spawn_minimal.py
@@ -20,7 +19,7 @@ import os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import frida
-from backend.frida_core import find_game, _is_dgvoodoo_glide
+from backend.frida_core import find_game, ensure_dgvoodoo, _is_dgvoodoo_glide
 
 try: sys.stdout.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
 except Exception: pass
@@ -51,15 +50,13 @@ def main():
     print(f'[*] game:     {game}')
     print(f'[*] game dir: {game_dir}')
 
-    dg = _is_dgvoodoo_glide(os.path.join(game_dir, 'glide2x.dll'))
-    print(f'[*] dgVoodoo glide2x.dll detected: {dg}')
-    if not dg:
-        print('[!] dgVoodoo 2 not installed — install it first:')
-        print('    1. Download dgVoodoo2_87_1.zip from https://github.com/dege-diosg/dgVoodoo2/releases')
-        print('    2. Copy 3Dfx/x86/Glide*.dll over the game folder glide*.dll')
-        print('    3. Copy dgVoodoo.conf and dgVoodooCpl.exe to the game folder')
-        print('    4. In dgVoodoo.conf set: FullScreenMode = false, WindowedAttributes = borderless')
+    if not ensure_dgvoodoo(game_dir):
+        print('[!] ensure_dgvoodoo() failed — bundle missing or copy error')
         return 1
+    if not _is_dgvoodoo_glide(os.path.join(game_dir, 'glide2x.dll')):
+        print('[!] dgVoodoo install did not take — glide2x.dll is not dgVoodoo')
+        return 1
+    print('[*] dgVoodoo 2 installed and verified')
 
     print(f'[*] spawning {game}')
     pid = frida.spawn([game], cwd=game_dir)
