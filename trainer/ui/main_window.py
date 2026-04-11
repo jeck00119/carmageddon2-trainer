@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout
                                 QStatusBar, QTabWidget, QVBoxLayout, QWidget)
 
 from ui.bridge import BackendBridge
-from ui.tab_cheats import CheatsTab
 from ui.tab_dev import DevTab
 from ui.tab_powerups import PowerupTab
 from ui.tab_race import RaceTab
@@ -112,7 +111,6 @@ class MainWindow(QMainWindow):
         # --- Tabs ---
         self.tabs = QTabWidget()
         self.tab_status = StatusTab(self.bridge)
-        self.tab_cheats = CheatsTab(self.bridge)
         self.tabs.addTab(RaceTab(self.bridge), 'Race')
         self.tabs.addTab(DevTab(self.bridge), 'Dev cheats')
         self.tabs.addTab(PowerupTab(self.bridge), 'Powerups')
@@ -131,9 +129,7 @@ class MainWindow(QMainWindow):
         self.status = QStatusBar()
         self.setStatusBar(self.status)
         self.lbl_state_friendly = QLabel('Game not running')
-        self.lbl_snap = QLabel('')
         self.status.addPermanentWidget(self.lbl_state_friendly)
-        self.status.addPermanentWidget(self.lbl_snap)
 
         # --- Snap poller ---
         self.snap_timer = QTimer(self)
@@ -142,15 +138,11 @@ class MainWindow(QMainWindow):
         self.snap_timer.start()
         self._snap_fail_count = 0
 
-        # --- Restore window geometry + advanced mode ---
+        # --- Restore window geometry ---
         self.settings = QSettings('carma2_tools', 'trainer')
         geom = self.settings.value('geometry')
         if geom:
             self.restoreGeometry(geom)
-        self._advanced = self.settings.value('advanced', False, type=bool)
-        self.tab_status.cb_advanced.setChecked(self._advanced)
-        self.tab_status.cb_advanced.toggled.connect(self._on_advanced_toggled)
-        self._refresh_advanced()
 
         # --- Global hotkey: Ctrl+Shift+W -> toggle windowed ---
         self._hk_filter = _HotkeyFilter(self._on_hotkey)
@@ -242,25 +234,10 @@ class MainWindow(QMainWindow):
     def _on_op_finished(self, op_name: str, result):
         self.status.showMessage(f'{op_name}: {result}', 5000)
 
-    def _on_advanced_toggled(self, on: bool):
-        self._advanced = on
-        self.settings.setValue('advanced', on)
-        self._refresh_advanced()
-
-    def _refresh_advanced(self):
-        idx = self.tabs.indexOf(self.tab_cheats)
-        if self._advanced and idx == -1:
-            self.tabs.addTab(self.tab_cheats, 'All cheats')
-        elif not self._advanced and idx != -1:
-            self.tabs.removeTab(idx)
-        self.lbl_snap.setVisible(self._advanced)
-        self.tab_status.set_advanced(self._advanced)
-
     def _poll_snap(self):
         attached = self.bridge.is_attached()
         if not attached:
             self.lbl_state_friendly.setText('Game not running')
-            self.lbl_snap.setText('')
             self.tab_status.update_snap(None, False, None)
             if self.snap_timer.interval() != 1000:
                 self.snap_timer.setInterval(1000)
@@ -271,7 +248,6 @@ class MainWindow(QMainWindow):
             self._snap_fail_count += 1
             if self._snap_fail_count >= 3:
                 self.lbl_state_friendly.setText('Connection lost')
-                self.lbl_snap.setText('')
                 self.tab_status.update_snap(None, False, None)
                 self.bridge.log.emit('Connection lost — detached automatically')
                 self.bridge.detach()
@@ -281,15 +257,12 @@ class MainWindow(QMainWindow):
         try:
             gs = s.get('game_state', 0)
             menu = s.get('menu', 0)
-            sel = s.get('sel', 0)
-            dgs = s.get('dogame_state', 0)
             if gs != 0:
                 friendly = 'In race'
             else:
                 menu_name = MENU_NAMES.get(menu)
                 friendly = f'In {menu_name}' if menu_name else 'In menu'
             self.lbl_state_friendly.setText(friendly)
-            self.lbl_snap.setText(f'menu=0x{menu:x} sel={sel} gs={gs} dgs={dgs}')
             self.tab_status.update_snap(s, True, self.bridge.backend.pid)
             self.bridge.snap_updated.emit(s)
         except Exception:

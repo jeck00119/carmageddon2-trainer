@@ -69,44 +69,21 @@ var DEV = {
     DAMAGE_STATE:0x67c498,   // 0..7 damage cycler state
     HUD_MODE:    0x655e54,   // 0..5 HUD cycler state
     GRAVITY:     0x68b910,   // gravity flag (0=earth, 1=lift off)
-    SPEC_FLAG:   0x6a0940,   // spectator camera enabled
-    SPEC_INDEX:  0x6a0a58,   // spectator current index
     GAME_STATE_PTR: 0x75bc2c,  // game state struct passed to spawn_powerup
-    SEL_DEV:     0x67c468,   // dev menu selection (0=Options, 1=Cheat)
 
     // Spawn fastcall + credit dispatcher
     SPAWN_POWERUP: 0x4d8d40,  // fastcall(ecx=GAME_STATE_PTR, edx=id, push 1, push 1)
     CREDIT_DELTA:  0x44b300,  // fastcall(ecx=delta, edx=&credits)
 
-    // void(void) mscdecl functions — verified by static analysis
+    // void(void) mscdecl functions
     FN_INSTANT_REPAIR:    0x5039b0, // F2 mask=0
     FN_DAMAGE_CYCLE:      0x444420, // F3 mask=0  (cycles DAMAGE_STATE 0..7)
     FN_TIMER_TOGGLE:      0x444590, // F5 mask=0  (timer freeze ↔ thaw)
     FN_TELEPORT:          0x4b5ab0, // F3 mask=4  (reset car position)
     FN_GRAVITY_TOGGLE:    0x444350, // toggles GRAVITY, prints "We have lift off!!" / "Back down to Earth"
-    FN_GRAVITY_STATE:     0x4443c0, // gravity state reader (in-race maintenance)
     FN_HUD_CYCLE:         0x444f40, // F12 (HUD_MODE cycler 0..5)
-    FN_DEV_MENU:          0x4414b0, // F1 (Edit mode: Options ↔ Cheat)
-    FN_SPECTATOR_TOGGLE:  0x4da9d0, // Tab
-    FN_SPECTATOR_NEXT:    0x4dab80, // '['
-    FN_SPECTATOR_PREV:    0x4daa00, // ']'
-    FN_ITEM_NEXT:         0x4d6240, // F4 mask=0
-    FN_ITEM_PREV:         0x4d6290, // F4 mask=4
-    FN_ITEM_SORT:         0x4d62e0, // F4 mask=1
-    FN_SHADOW_TOGGLE:     0x4e9b90, // F5 mask=1 (Solid ↔ Translucent)
-    FN_SHADOW_3STATE:     0x4e9960, // F5 mask=4 (3-state cycler)
-    FN_RESET_SOUND_STATE: 0x502e00, // F2 mask=1
-    FN_QUICK_SAVE:        0x5032a0, // F7 mask=4
-    FN_VISUAL_TOGGLE_9:   0x494880, // AI debug log trigger
-    FN_DEV_CHECK_9:       0x40e900, // '9' — AI state checker
-    FN_SIMPLE_TOGGLE:     0x441490, // '8' — effect unknown
-    FN_LIGHTING_PROFILER: 0x444ed0, // camera mode cycler (historical name)
+    FN_SIMPLE_TOGGLE:     0x441490, // '8' — force race end
     FN_GONAD_OF_DEATH:    0x444f10,
-    FN_DEMOFILE_LOAD:     0x445000,
-
-    // Powerup spawner family base addresses (10 fns at +0x60 stride)
-    // base offset 0..9; modifier keys add 10/20/40/80
-    FN_SPAWNER_BASE:      0x4dbdb0,
 };
 
 // Win32 message IDs we care about (others early-exit)
@@ -476,41 +453,28 @@ function addCreditDelta(delta) {
     }
 }
 
-function callPowerupSpawnerFamily(baseIdx) {
-    if (baseIdx < 0 || baseIdx > 9) return 'bad base';
-    return callDev(DEV.FN_SPAWNER_BASE + baseIdx * 0x60);
-}
-
 // ===========================================================================
 // RPC
 // ===========================================================================
 rpc.exports = {
     snap: function () {
-        // Compound state read — single RPC returns everything the UI needs
-        // including dev mode state. Polled at 1 Hz from the trainer.
+        // Compound state read — single RPC returns everything the UI needs.
+        // Polled at 1 Hz from the trainer.
         return {
-            // Menu / race state (existing)
+            // Menu / race state
             menu:         rd32(VA.MENU_PTR),
             sel:          rd32(VA.SEL),
             game_state:   rd32(VA.GAME_STATE),
             dogame_state: rd32(VA.DOGAME_STATE),
             main_menu:    VA.MAIN_MENU,
             newgame_menu: VA.NEWGAME_MENU,
-            // Dev cheat state
+            // Dev cheat state (for cyclers and displays)
             cheat_mode:   rd32(DEV.CHEAT_MODE),
             dev_active:   rd32(DEV.CHEAT_MODE) === DEV.MODE_VALUE,
             credits:      rd32(DEV.CREDITS),
             damage_state: rd32(DEV.DAMAGE_STATE),
             hud_mode:     rd32(DEV.HUD_MODE),
             gravity:      rd32(DEV.GRAVITY),
-            spec_active:  rd32(DEV.SPEC_FLAG),
-            spec_index:   rd32(DEV.SPEC_INDEX),
-            sel_dev:      rd32(DEV.SEL_DEV),
-            // Extended state for cycler live labels
-            shadow_type:  rd32(0x6a23d8),
-            shadow_3st:   rd32(0x65fdc8),
-            item_count:   rd32(0x7447d4),
-            item_index:   rd32(0x7447f0),
         };
     },
     clickSel: function (sel) { return click(sel); },
@@ -580,51 +544,14 @@ rpc.exports = {
         }
         return 'not_found: id=' + id + ' not in cheat table';
     },
-    spawnerFamily:    function (baseIdx) { return callPowerupSpawnerFamily(baseIdx); },
-
-    // Item / opponent cycler (F4 family)
-    itemNext:         function () { return callDev(DEV.FN_ITEM_NEXT); },
-    itemPrev:         function () { return callDev(DEV.FN_ITEM_PREV); },
-    itemSort:         function () { return callDev(DEV.FN_ITEM_SORT); },
-
     // HUD / display
     hudCycle:         function () { return callDev(DEV.FN_HUD_CYCLE); },
-    shadowToggle:     function () { return callDev(DEV.FN_SHADOW_TOGGLE); },
-    shadow3State:     function () { return callDev(DEV.FN_SHADOW_3STATE); },
 
-    // Spectator camera
-    spectatorToggle:  function () { return callDev(DEV.FN_SPECTATOR_TOGGLE); },
-    spectatorNext:    function () { return callDev(DEV.FN_SPECTATOR_NEXT); },
-    spectatorPrev:    function () { return callDev(DEV.FN_SPECTATOR_PREV); },
-
-    // State / save (with NULL-guard for crash-prone fns)
-    quickSave: function () {
-        // 0x5032a0 reads [[0x762438]+0x210] — crashes if [0x762438] is NULL (not in race)
-        var p = rd32(0x762438);
-        if (p === 0 || p === 0xDEAD) return 'skip: not in race (NULL struct)';
-        return callDev(DEV.FN_QUICK_SAVE);
-    },
-    resetSoundState:  function () { return callDev(DEV.FN_RESET_SOUND_STATE); },
-
-    // Sound / misc
+    // Utility — force race end (sets [0x74d1a0]=1, kicks you back to main menu)
     simpleToggle:     function () { return callDev(DEV.FN_SIMPLE_TOGGLE); },
-    devMenuCycle:     function () { return callDev(DEV.FN_DEV_MENU); },
 
-    // AI debug (triggers opponent AI log messages)
-    visualToggle9:    function () { return callDev(DEV.FN_VISUAL_TOGGLE_9); },
-
-    // Misc dev
-    lightingProfiler: function () {
-        // 0x444ed0 -> 0x40e7f0 -> chain reads struct fields that can be NULL
-        // Guard: check [0x676914] — fn itself bails if non-zero anyway
-        var flag = rd32(0x676914);
-        if (flag !== 0) return 'skip: guard flag set';
-        // Additional check: dogame_state must be 5 (in race)
-        if (rd32(VA.DOGAME_STATE) !== 5) return 'skip: not in race';
-        return callDev(DEV.FN_LIGHTING_PROFILER);
-    },
+    // Steel Gonad o' Death
     gonadOfDeath:     function () { return callDev(DEV.FN_GONAD_OF_DEATH); },
-    demoFileLoad:     function () { return callDev(DEV.FN_DEMOFILE_LOAD); },
 
     // Unlock all 9 camera modes (default: only 4 enabled)
     // Writes to flag arrays at 0x58f600 and 0x58f610 — each byte is a mode enable flag
@@ -640,16 +567,13 @@ rpc.exports = {
     },
 
     // Hidden cheat (only fires from MENU — the check is in the menu update fn)
+    // MWUCUZYSFUYHTQWXEPVU — unlocks all cars and races
     hiddenCheat: function () {
-        // Hash (0x616fb8e4, 0x7c6100a8) — toggles sound/cd, one-shot sets [0x75bc04]
         injectH1 = 0x616fb8e4;
         injectH2 = 0x7c6100a8;
         injectArmed = true;
         return 'armed (menu only)';
     },
-
-    // AI state checker
-    devCheck9:        function () { return callDev(DEV.FN_DEV_CHECK_9); },
 
 };
 

@@ -361,47 +361,24 @@ class Carma2Backend:
 
     def set_credits(self, amt: int) -> str: return self._rpc('set_credits', amt)
     def add_credits(self, delta: int) -> str: return self._rpc('add_credits', delta)
-    def set_damage_state(self, n: int) -> str: return self._rpc('set_damage_state', n)
-    def set_hud_mode(self, n: int) -> str: return self._rpc('set_hud_mode', n)
-    def set_gravity(self, v: int) -> str: return self._rpc('set_gravity', v)
 
     def instant_repair(self) -> str: return self._rpc('instant_repair')
     def damage_cycle(self) -> str: return self._rpc('damage_cycle')
     def timer_toggle(self) -> str: return self._rpc('timer_toggle')
     def teleport(self) -> str: return self._rpc('teleport')
-    def gravity_toggle(self) -> str: return self._rpc('gravity_toggle')
-    def gravity_state(self) -> str: return self._rpc('gravity_state')
 
     def spawn_powerup(self, pid: int) -> str: return self._rpc('spawn_powerup', pid)
-    def spawner_family(self, base_idx: int) -> str: return self._rpc('spawner_family', base_idx)
 
-    def item_next(self) -> str: return self._rpc('item_next')
-    def item_prev(self) -> str: return self._rpc('item_prev')
-    def item_sort(self) -> str: return self._rpc('item_sort')
-
-    def hud_cycle(self) -> str: return self._rpc('hud_cycle')
-    def shadow_toggle(self) -> str: return self._rpc('shadow_toggle')
-    def shadow_3state(self) -> str: return self._rpc('shadow3_state')
-
-    def spectator_toggle(self) -> str: return self._rpc('spectator_toggle')
-    def spectator_next(self) -> str: return self._rpc('spectator_next')
-    def spectator_prev(self) -> str: return self._rpc('spectator_prev')
-
-    def quick_save(self) -> str: return self._rpc('quick_save')
-    def reset_sound_state(self) -> str: return self._rpc('reset_sound_state')
-
-    def simple_toggle(self) -> str: return self._rpc('simple_toggle')
-    def dev_menu_cycle(self) -> str: return self._rpc('dev_menu_cycle')
-
-    def visual_toggle_9(self) -> str: return self._rpc('visual_toggle9')
-
-    def lighting_profiler(self) -> str: return self._rpc('lighting_profiler')
+    def gravity_toggle(self) -> str: return self._rpc('gravity_toggle')
     def gonad_of_death(self) -> str: return self._rpc('gonad_of_death')
-    def demo_file_load(self) -> str: return self._rpc('demo_file_load')
-    def hidden_cheat(self) -> str: return self._rpc('hidden_cheat')
+
     def unlock_all_cameras(self) -> str: return self._rpc('unlock_all_cameras')
 
-    def dev_check_9(self) -> str: return self._rpc('dev_check_9')
+    def hud_cycle(self) -> str: return self._rpc('hud_cycle')
+
+    def hidden_cheat(self) -> str: return self._rpc('hidden_cheat')
+
+    def simple_toggle(self) -> str: return self._rpc('simple_toggle')
 
     # ----- high-level macros -----
 

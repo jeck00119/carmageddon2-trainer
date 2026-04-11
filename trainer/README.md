@@ -16,12 +16,13 @@ just makes them accessible on Steam where the typed-code dispatcher is broken.
 - **One-click cheat firing** — fires any of the 94 cheat strings via hash
   injection (hooks `GetCheatInputHash` and overrides the hash buffer before
   `CheatDetect` reads it). No typing required.
-- **36 dev cheat functions** wired to buttons, organized into 11 groups:
-  instant repair, damage cycler (god mode), credit ops, teleport, gravity
-  toggle, timer freeze, HUD mode cycler, spectator camera, camera mode
-  cycler (including the unused Ped Cam / Drone Cam via flag-array writes),
-  powerup spawner, shadow toggles, AI debug, and more. All runtime-verified
-  on the retail Steam binary.
+- **21 dev cheat functions** wired to buttons, organized into 9 groups
+  (cheat/advantage focused only — no debug, no visual settings):
+  instant repair, damage cycler (god mode), timer freeze, teleport, credit
+  ops (+/-2k/5k/set/max/drain), spawn any powerup, gravity toggle, gonad
+  of death, unlock all 9 cameras (including unused Ped Cam / Drone Cam),
+  HUD mode cycler, unlock all cars & races (menu cheat), force race end.
+  All runtime-verified on the retail Steam binary.
 - **No minimize on alt-tab** — game stays visible when you switch windows
 - **Windowed-mode toggle** — Ctrl+Shift+W global hotkey, in-bar button, or auto-on-spawn checkbox
 - **Pinnable favorites** — right-click any powerup to pin it to the Race tab
@@ -49,10 +50,9 @@ time, regardless of which window has focus.
   - **RACE FLOW**: Auto-start race · Finish race · Enable cheat mode
   - **SPECIAL CHEATS**: Fly mode · Gonad of death (non-powerup actions)
   - **FAVORITES**: dynamic group of user-pinned powerups. Right-click any powerup in the Powerups tab to pin/unpin.
-- **Dev cheats** — 36 developer features dispatched by setting `cheat_mode = 0xa11ee75d` at `[0x68b8e0]` and calling the polled-table functions directly (bypassing the broken typed-code path on Steam). Groups: dev mode toggle · player actions · credits ops · powerup spawner · movement · spectator camera · HUD/display · main menu · sound · AI debug · misc. Live state for credits, damage, gravity, HUD mode, spectator, shadows. **Enable Dev Mode first** or nothing else fires.
+- **Dev cheats** — 21 cheat-focused features dispatched by setting `cheat_mode = 0xa11ee75d` at `[0x68b8e0]` and calling polled-table functions directly (bypassing the broken typed-code path on Steam). Groups: dev mode · player · credits · powerups · physics · cameras · display · main menu · utility. Live state for credits, damage, gravity, HUD mode. **Enable Dev Mode first** or nothing else fires.
 - **Powerups** — grid of all 89 spawn-powerup cheats with search filter. Right-click for the pin/unpin context menu. Pinned powerups get a Carma-red border.
-- **Status** — connection state, force-reattach, About text, and an **Advanced / developer mode** toggle.
-- **All cheats** *(only visible in Advanced mode)* — full 94-entry table view with handler/arg columns.
+- **Status** — connection state, game path, nGlide status, force-reattach button, and About text.
 
 The top bar holds: connection state · Attach/Spawn · Detach · "Start in windowed" checkbox · "Windowed ⇄" runtime toggle button.
 
@@ -93,11 +93,11 @@ trainer/
 │   ├── agent.js           Frida script: input release, dinput non-exclusive,
 │   │                      no-minimize WndProc subclass, nGlide windowed toggle,
 │   │                      cheat hash injection, menu click reimpl,
-│   │                      dev cheat RPCs (36)
+│   │                      dev cheat RPCs (21)
 │   ├── frida_core.py      Carma2Backend (spawn/attach/detach, _rpc() wrapper,
 │   │                      auto_start_race, EXE verify, ensure_nglide)
 │   ├── cheat_db.py        94-entry cheat table (embedded, no binary needed)
-│   ├── dev_actions.py     Declarative registry of all 36 dev cheat actions
+│   ├── dev_actions.py     Declarative registry of all 21 dev cheat actions
 │   │                      with metadata (group, kind, requires, state_key)
 │   ├── diag_focus.py      (diagnostic template, not used at runtime)
 │   └── diag_messages.py   (diagnostic template, not used at runtime)
@@ -110,8 +110,7 @@ trainer/
     ├── tab_dev.py         Dev cheats tab — generic widget factory driven by
     │                      dev_actions registry; live state from snap_updated
     ├── tab_powerups.py    89-button grid w/ search filter
-    ├── tab_cheats.py      Full table view, click row + FIRE to trigger
-    └── tab_status.py      Connection + live state + about
+    └── tab_status.py      Connection + game path + about
 ```
 
 ## Adding new cheats
@@ -124,7 +123,6 @@ automatically — `cheat_db.py` joins on `(h1, h2)`.
 
 Stored via `QSettings('carma2_tools', 'trainer')` (Windows registry):
 - `geometry` — window position/size
-- `advanced` — Advanced/Developer mode toggle
 - `favorites` — list of pinned cheat names
 - `game_exe` — auto-detected game path
 

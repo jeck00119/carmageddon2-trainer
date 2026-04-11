@@ -1,7 +1,5 @@
-"""Status tab — connection info + game path + live game state + advanced toggle."""
-import os
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QCheckBox, QFileDialog, QFormLayout, QGroupBox,
+"""Status tab — connection info + game path + about text."""
+from PySide6.QtWidgets import (QFileDialog, QFormLayout, QGroupBox,
                                 QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
                                 QWidget)
 
@@ -68,30 +66,9 @@ class StatusTab(QWidget):
         self.lbl_nglide.setStyleSheet(f'{nglide_style} font-size: 9pt;')
         conn.addRow('nGlide:', self.lbl_nglide)
 
-        self.cb_advanced = QCheckBox('Advanced / developer mode')
-        self.cb_advanced.setToolTip(
-            'Show internal debug info: live game state, full cheat table, '
-            'memory addresses. Off by default.')
-        conn.addRow(self.cb_advanced)
         layout.addWidget(conn_box)
 
-        # Live state group (only visible in advanced mode)
-        self.state_box = QGroupBox('LIVE GAME STATE  ·  1 Hz')
-        state = QFormLayout(self.state_box)
-        self.lbl_menu = QLabel('—')
-        self.lbl_sel = QLabel('—')
-        self.lbl_gs = QLabel('—')
-        self.lbl_dgs = QLabel('—')
-        self.lbl_in_race = QLabel('—')
-        state.addRow('Menu:', self.lbl_menu)
-        state.addRow('Selection:', self.lbl_sel)
-        state.addRow('game_state:', self.lbl_gs)
-        state.addRow('dogame_state:', self.lbl_dgs)
-        state.addRow('In race:', self.lbl_in_race)
-        layout.addWidget(self.state_box)
-        self.state_box.hide()  # default off; main_window flips on Advanced toggle
-
-        # Info group
+        # About text
         info_box = QGroupBox('ABOUT')
         info = QVBoxLayout(info_box)
         info_text = QLabel(
@@ -99,10 +76,6 @@ class StatusTab(QWidget):
             'Re-enables the dev/edit mode that\'s broken on the Steam edition. '
             'Hooks the live game via runtime memory instrumentation — no binary '
             'patching, no save-file editing, no typed cheat codes.<br><br>'
-            'The dev features themselves are publicly documented in the '
-            '<i>Carmashit cheat executable</i> article and on the Carmageddon '
-            'wiki; this trainer just makes them accessible on Steam where '
-            'the typed-code path no longer works.<br><br>'
             'Cheats are fired by injecting the game\'s own cheat hash '
             'dispatcher — one click fires any of the 94 cheats without typing.'
         )
@@ -121,28 +94,6 @@ class StatusTab(QWidget):
             self.lbl_state.setText('Detached')
             self.lbl_state.setStyleSheet('color: #c33; font-weight: bold;')
             self.lbl_pid.setText('—')
-
-        if snap is None:
-            for lbl in (self.lbl_menu, self.lbl_sel, self.lbl_gs,
-                        self.lbl_dgs, self.lbl_in_race):
-                lbl.setText('—')
-            return
-
-        menu_va = snap.get('menu', 0)
-        menu_name = MENU_NAMES.get(menu_va, '?')
-        self.lbl_menu.setText(f'0x{menu_va:08x}  ({menu_name})')
-        self.lbl_sel.setText(str(snap.get('sel', 0)))
-        self.lbl_gs.setText(str(snap.get('game_state', 0)))
-        self.lbl_dgs.setText(str(snap.get('dogame_state', 0)))
-        in_race = snap.get('game_state', 0) != 0
-        self.lbl_in_race.setText('YES' if in_race else 'no')
-        self.lbl_in_race.setStyleSheet(
-            'color: #2a2; font-weight: bold;' if in_race
-            else 'color: #888;'
-        )
-
-    def set_advanced(self, on: bool):
-        self.state_box.setVisible(on)
 
     def _reattach(self):
         self.bridge.detach()
