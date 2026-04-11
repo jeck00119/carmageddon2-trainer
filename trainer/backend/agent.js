@@ -180,75 +180,42 @@ if (u32) {
             'int', ['pointer', 'uint32', 'uint32', 'uint32'], 'stdcall');
     } catch (e) {}
 
-    // ---- Input release: blanket-ignore window-focus-stealing APIs ----
+    // ---- Input release: only stop the game from locking/capturing the cursor ----
+    // NOTE: We used to noop SetForegroundWindow/BringWindowToTop/SetActiveWindow/
+    // SetWindowPos too, but those broke Alt+Tab by preventing Windows from
+    // transferring focus. Now we only neutralize cursor-grabbing APIs so the
+    // mouse stays free in windowed mode — focus transitions work normally.
     function noop(name, ret, sig) {
         try {
             Interceptor.replace(u32.getExportByName(name),
                 new NativeCallback(function () { return ret; }, sig[0], sig[1], sig[2]));
         } catch (e) {}
     }
-    noop('ClipCursor',              1,      ['int',     ['pointer'],                     'stdcall']);
-    noop('SetCapture',              ptr(0), ['pointer', ['pointer'],                     'stdcall']);
-    noop('SetForegroundWindow',     1,      ['int',     ['pointer'],                     'stdcall']);
-    noop('BringWindowToTop',        1,      ['int',     ['pointer'],                     'stdcall']);
-    noop('LockSetForegroundWindow', 1,      ['int',     ['uint32'],                      'stdcall']);
-    noop('RegisterRawInputDevices', 1,      ['int',     ['pointer','uint32','uint32'],   'stdcall']);
+    noop('ClipCursor', 1,      ['int',     ['pointer'], 'stdcall']);
+    noop('SetCapture', ptr(0), ['pointer', ['pointer'], 'stdcall']);
 
-    try {
-        Interceptor.attach(u32.getExportByName('SetActiveWindow'),
-            { onEnter: function (args) { args[0] = ptr(0); } });
-    } catch (e) {}
-
-    try {
-        Interceptor.attach(u32.getExportByName('SetWindowPos'), {
-            onEnter: function (args) {
-                if (args[1].toInt32() === -1) args[1] = ptr(-2);
-                args[6] = ptr(args[6].toInt32() | 0x10);  // | SWP_NOACTIVATE
-            }
-        });
-    } catch (e) {}
-
-    // ---- WndProc subclass (no-minimize + WM_TRAINER_ALTENTER dispatch) ----
-    // This runs for every message dispatched to the game window. The hot path
-    // is the `default` switch case which is just a return.
+    // ---- WndProc subclass (only for WM_TRAINER_ALTENTER custom dispatch) ----
+    // We hook the game's WndProc to capture the hwnd and to intercept our
+    // custom WM_TRAINER_ALTENTER message (posted by the trainer to toggle
+    // windowed mode on the main thread). We do NOT swallow focus-loss
+    // messages anymore — that broke Alt+Tab.
     var hookedProcs = {};
 
     function hookWndProc(addr) {
         var key = addr.toString();
         if (hookedProcs[key]) return;
         hookedProcs[key] = true;
-        send({h: 'log', msg: 'WndProc hooked @ ' + addr});
         try {
             Interceptor.attach(addr, {
                 onEnter: function (args) {
                     if (gameHwnd.isNull()) {
                         gameHwnd = args[0];
-                        send({h: 'log', msg: 'gameHwnd captured: ' + gameHwnd});
                     }
                     var msg = args[1].toInt32();
-                    if (msg !== WM_TRAINER_ALTENTER &&
-                        msg !== WM_ACTIVATEAPP &&
-                        msg !== WM_ACTIVATE &&
-                        msg !== WM_NCACTIVATE &&
-                        msg !== WM_KILLFOCUS) return;
-
-                    var wp = args[2].toInt32();
-                    var swallow = false;
-
                     if (msg === WM_TRAINER_ALTENTER) {
                         doToggle();
-                        swallow = true;
-                    } else if (msg === WM_ACTIVATEAPP && wp === 0) {
-                        swallow = true;
-                    } else if (msg === WM_ACTIVATE && (wp & 0xFFFF) === WA_INACTIVE) {
-                        swallow = true;
-                    } else if (msg === WM_NCACTIVATE && wp === 0) {
-                        swallow = true;
-                    } else if (msg === WM_KILLFOCUS) {
-                        swallow = true;
-                    }
-
-                    if (swallow) {
+                        // Rewrite to WM_NULL so the game's WndProc doesn't
+                        // see our custom message.
                         args[1] = ptr(WM_NULL);
                         args[2] = ptr(0);
                         args[3] = ptr(0);
@@ -278,19 +245,45 @@ if (u32) {
     captureFromRegister('RegisterClassExA', 8);
     captureFromRegister('RegisterClassExW', 8);
 
-    // ---- Capture nGlide WH_KEYBOARD hook proc once, extract toggle addrs ----
+    // ---- Intercept SetWindowsHookEx for two reasons ----
+    // 1. Capture nGlide's WH_KEYBOARD hook proc (type 2) for Alt+Enter toggle
+    // 2. BLOCK DirectInput's WH_KEYBOARD_LL hook (type 13) — that low-level
+    //    keyboard hook eats Alt+Tab before Windows' shell processes it, which
+    //    is why Alt+Tab does nothing in the game.
+    //
+    // Implementation: in onEnter we detect WH_KEYBOARD_LL and mark it. We
+    // also rewrite the hook type to an invalid value (99) so the real
+    // SetWindowsHookEx returns NULL (= install failed). Then in onLeave we
+    // overwrite the NULL return with a fake non-NULL handle, so the caller
+    // (DINPUT.dll) thinks the install succeeded and moves on.
     function hookSetWHE(name) {
         try {
             Interceptor.attach(u32.getExportByName(name), {
                 onEnter: function (args) {
-                    if (args[0].toInt32() !== 2) return;          // WH_KEYBOARD only
-                    if (!nglideKeyboardProc.isNull()) return;     // first one only
-                    nglideKeyboardProc = args[1];
-                    send({h: 'kbd_proc', addr: nglideKeyboardProc.toString()});
-                    extractToggle(nglideKeyboardProc);
+                    var idHook = args[0].toInt32();
+                    // WH_KEYBOARD = 2: capture nGlide's hook proc
+                    if (idHook === 2 && nglideKeyboardProc.isNull()) {
+                        nglideKeyboardProc = args[1];
+                        send({h: 'kbd_proc', addr: nglideKeyboardProc.toString()});
+                        extractToggle(nglideKeyboardProc);
+                    }
+                    // WH_KEYBOARD_LL = 13: block DirectInput's low-level
+                    // keyboard eater.
+                    if (idHook === 13) {
+                        this.blocked = true;
+                        // Rewrite hook type to invalid → real call returns NULL
+                        args[0] = ptr(99);
+                    }
+                },
+                onLeave: function (retval) {
+                    if (this.blocked) {
+                        // Fake a successful install so DINPUT moves on.
+                        retval.replace(ptr(0xDEADBEEF));
+                        send({h: 'log', msg: 'BLOCKED WH_KEYBOARD_LL install'});
+                    }
                 }
             });
-        } catch (e) {}
+        } catch (e) { send({h: 'log', msg: name + ' hook failed: ' + e}); }
     }
     hookSetWHE('SetWindowsHookExA');
     hookSetWHE('SetWindowsHookExW');

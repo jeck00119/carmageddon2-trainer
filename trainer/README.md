@@ -23,7 +23,7 @@ just makes them accessible on Steam where the typed-code dispatcher is broken.
   of death, unlock all 9 cameras (including unused Ped Cam / Drone Cam),
   HUD mode cycler, unlock all cars & races (menu cheat), force race end.
   All runtime-verified on the retail Steam binary.
-- **No minimize on alt-tab** — game stays visible when you switch windows
+- **Alt+Tab works normally** — game behaves like a standard Windows app (minimize on focus loss, restore on click, etc.)
 - **Windowed-mode toggle** — Ctrl+Shift+W global hotkey, in-bar button, or auto-on-spawn checkbox
 - **Pinnable favorites** — right-click any powerup to pin it to the Race tab
 - **Friendly status text** — bottom of window shows "In Main menu" / "In race" etc.
@@ -69,11 +69,13 @@ For menu navigation, the agent reimplements the click handler natively using
 `NativeFunction` calls into the engine's `menu_cleanup`/`init`/`finalize`/`postfx`
 chain — no `SendInput`, no fake mouse cursor.
 
-To stop the game minimizing on alt-tab, the agent hooks `RegisterClass[Ex]A/W`
-at startup, captures the game's `lpfnWndProc`, and `Interceptor.attach`es it.
-On every WndProc call it inspects the message; deactivation messages
-(`WM_ACTIVATEAPP`, `WM_ACTIVATE`, `WM_NCACTIVATE`, `WM_KILLFOCUS`) get rewritten
-to `WM_NULL` so the game never triggers its display-mode tear-down.
+To make Alt+Tab work normally, the agent blocks DirectInput from installing
+its `WH_KEYBOARD_LL` low-level keyboard hook (which was eating system keys
+before Windows could see them). It intercepts `SetWindowsHookEx`, and when
+DINPUT.dll requests hook type 13 (`WH_KEYBOARD_LL`), it rewrites the hook
+type to an invalid value so the real call fails, then overrides the NULL
+return with a fake handle so DINPUT thinks the install succeeded. The
+game's keyboard still works via regular Windows message queue.
 
 For the windowed-mode toggle, the agent captures nGlide's `WH_KEYBOARD` hook
 proc address (installed via `SetWindowsHookExA` from `glide2x.dll`) and
@@ -89,10 +91,10 @@ trainer/
 ├── deps/
 │   └── glide2x.dll        bundled nGlide 2.60 (auto-installed)
 ├── backend/
-│   ├── agent.js           Frida script: input release, dinput non-exclusive,
-│   │                      no-minimize WndProc subclass, nGlide windowed toggle,
-│   │                      cheat hash injection, menu click reimpl,
-│   │                      dev cheat RPCs (21)
+│   ├── agent.js           Frida script: cursor release, dinput non-exclusive,
+│   │                      WH_KEYBOARD_LL blocker (alt-tab fix), nGlide
+│   │                      windowed toggle, cheat hash injection, menu click
+│   │                      reimpl, dev cheat RPCs (21)
 │   ├── frida_core.py      Carma2Backend (spawn/attach/detach, _rpc() wrapper,
 │   │                      auto_start_race, EXE verify, ensure_nglide)
 │   ├── cheat_db.py        94-entry cheat table (embedded, no binary needed)
