@@ -32,6 +32,25 @@ AGENT_JS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent.js')
 KNOWN_NGLIDE_SIZE = 1630208
 NGLIDE_BUNDLED = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'deps', 'glide2x.dll')
 
+# Detect dgVoodoo 2's glide2x.dll so we don't replace it with nGlide.
+# dgVoodoo's Glide2x.dll is ~200 KB and contains the literal "dgVoodoo" in its
+# VERSIONINFO block as a UTF-16 string. Use a size-range + wide-string magic
+# check (robust across minor dgVoodoo versions).
+_DGVOODOO_MAGIC = 'dgVoodoo'.encode('utf-16-le')  # b'd\0g\0V\0o\0o\0d\0o\0o\0'
+
+def _is_dgvoodoo_glide(path: str) -> bool:
+    try:
+        if not os.path.isfile(path):
+            return False
+        size = os.path.getsize(path)
+        if not (100_000 <= size <= 400_000):
+            return False
+        with open(path, 'rb') as f:
+            data = f.read()
+        return _DGVOODOO_MAGIC in data
+    except Exception:
+        return False
+
 
 def find_game(saved_path: str = '') -> Optional[str]:
     """Auto-detect the game EXE path."""
@@ -150,7 +169,11 @@ def check_nglide(game_dir: str) -> dict:
 
 
 def ensure_nglide(game_dir: str) -> bool:
-    """If game folder has wrong-sized glide2x.dll, replace with bundled copy."""
+    """If game folder has wrong-sized glide2x.dll, replace with bundled copy.
+
+    Leaves dgVoodoo 2's Glide wrapper alone — users may deliberately install
+    dgVoodoo for proper windowed / Alt+Tab support, and we must not clobber it.
+    """
     if not game_dir:
         return False
     dst = os.path.join(game_dir, 'glide2x.dll')
@@ -158,6 +181,11 @@ def ensure_nglide(game_dir: str) -> bool:
 
     if not os.path.isfile(bundled) or os.path.getsize(bundled) != KNOWN_NGLIDE_SIZE:
         return False
+
+    # Don't touch dgVoodoo — that's a user choice, and installing nGlide over it
+    # would break their setup. Just return OK.
+    if _is_dgvoodoo_glide(dst):
+        return True
 
     if os.path.isfile(dst):
         if os.path.getsize(dst) == KNOWN_NGLIDE_SIZE:
