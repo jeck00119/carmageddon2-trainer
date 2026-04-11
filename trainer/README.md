@@ -28,7 +28,6 @@ just makes them accessible on Steam where the typed-code dispatcher is broken.
 - **Pinnable favorites** — right-click any powerup to pin it to the Race tab
 - **Friendly status text** — bottom of window shows "In Main menu" / "In race" etc.
 - **Disabled-when-detached** — buttons grey out when the game isn't attached
-- **Advanced/Developer mode** — opt-in toggle to expose the full cheat table + live debug state
 - **Auto-detects game path** — searches Steam registry, running processes, common install paths
 - **Bundles nGlide 2.60** — auto-installs the correct version for windowed mode support
 
@@ -150,4 +149,4 @@ The dev/edit mode features exposed by this trainer are documented publicly:
   (MD5 `66a9c49483ff4415b518bb7df01385bd`).
 - Hash injection technique for one-click cheat firing without typing.
 - Runtime extraction of nGlide's windowed-toggle flag addresses.
-- PySide6 GUI organized into 13 dev cheat groups with live state display.
+- PySide6 GUI organized into 9 dev cheat groups with live state display.

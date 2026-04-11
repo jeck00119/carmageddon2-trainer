@@ -517,7 +517,6 @@ rpc.exports = {
     timerToggle:      function () { return callDev(DEV.FN_TIMER_TOGGLE); },
     teleport:         function () { return callDev(DEV.FN_TELEPORT); },
     gravityToggle:    function () { return callDev(DEV.FN_GRAVITY_TOGGLE); },
-    gravityState:     function () { return callDev(DEV.FN_GRAVITY_STATE); },
 
     // Powerups
     // spawnPowerup uses hash injection for safety — calling spawn_powerup
