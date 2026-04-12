@@ -37,6 +37,7 @@ DGVOODOO_FILES = [
     ('Glide.dll',       'glide.dll'),
     ('Glide2x.dll',     'glide2x.dll'),
     ('Glide3x.dll',     'glide3x.dll'),
+    ('DDraw.dll',       'ddraw.dll'),     # intercepts DirectDraw exclusive mode
     ('dgVoodoo.conf',   'dgVoodoo.conf'),
     ('dgVoodooCpl.exe', 'dgVoodooCpl.exe'),
 ]
