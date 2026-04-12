@@ -86,6 +86,7 @@ class MainWindow(QMainWindow):
         self.snap_timer.timeout.connect(self._poll_snap)
         self.snap_timer.start()
         self._snap_fail_count = 0
+        self._was_attached = False   # Bug 1 fix: track attached state for transition detection
 
         # --- Restore window geometry ---
         self.settings = QSettings('carma2_tools', 'trainer')
@@ -137,12 +138,18 @@ class MainWindow(QMainWindow):
     def _poll_snap(self):
         attached = self.bridge.is_attached()
         if not attached:
+            # Bug 1 fix: detect attached→detached transition (game died/crashed)
+            # and emit the signal so all buttons reset correctly.
+            if self._was_attached:
+                self._was_attached = False
+                self.bridge.detach()   # cleans up pid, emits attached_changed(False)
             self.lbl_state_friendly.setText('Game not running')
             self.tab_status.update_snap(None, False, None)
             if self.snap_timer.interval() != 1000:
                 self.snap_timer.setInterval(1000)
                 self._snap_fail_count = 0
             return
+        self._was_attached = True
         s = self.bridge.snap()
         if s is None:
             self._snap_fail_count += 1

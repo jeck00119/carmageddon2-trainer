@@ -249,6 +249,7 @@ class Carma2Backend:
         self.script: Optional[frida.core.Script] = None
         self.api = None
         self.pid: Optional[int] = None
+        self._cancelled = False   # set by detach() to abort in-flight workers
 
         try:
             self.device = frida.get_local_device()
@@ -311,11 +312,18 @@ class Carma2Backend:
         return pid
 
     def _attach(self, pid: int, resume: bool):
+        # Bug 4 fix: clean up any prior session before re-attaching
+        self.detach()
+        self._cancelled = False
+
         with open(AGENT_JS, 'r', encoding='utf-8') as f:
             src = f.read()
 
         session = self.device.attach(pid)
-        session.on('detached', self._on_session_detached)
+        # Bug 3 fix: capture session in closure so the callback only clears
+        # THIS session, not a newer one from a subsequent _attach() call.
+        session.on('detached',
+                   lambda reason, crash, s=session: self._on_session_detached(reason, crash, s))
 
         script = session.create_script(src)
         script.on('message', self._on_message)
@@ -336,7 +344,10 @@ class Carma2Backend:
         if resume:
             self.device.resume(pid)
 
-    def _on_session_detached(self, reason, crash):
+    def _on_session_detached(self, reason, crash, detached_session=None):
+        # Bug 3 fix: ignore stale callbacks from old sessions
+        if detached_session is not None and detached_session is not self.session:
+            return
         try:
             self._on_log(f'Session lost: {reason}')
         except Exception:
@@ -344,8 +355,10 @@ class Carma2Backend:
         self.session = None
         self.script = None
         self.api = None
+        self.pid = None     # Bug 2 fix: clear pid so UI doesn't show stale info
 
     def detach(self):
+        self._cancelled = True  # Bug 7: abort in-flight workers
         if self.session is not None:
             try:
                 self.session.detach()
@@ -420,6 +433,8 @@ class Carma2Backend:
     def _wait_for(self, predicate, timeout: float, poll: float = 0.1) -> bool:
         deadline = time.time() + timeout
         while time.time() < deadline:
+            if self._cancelled:
+                return False
             s = self.snap()
             if s is None:
                 return False
@@ -434,6 +449,8 @@ class Carma2Backend:
         last = None
         stable = 0
         while time.time() < deadline:
+            if self._cancelled:
+                return False
             s = self.snap()
             if s is None:
                 return False
@@ -476,9 +493,11 @@ class Carma2Backend:
 
         deadline = time.time() + 20.0
         while time.time() < deadline:
+            if self._cancelled:
+                return False
             s = self.snap()
             if s is None:
-                return True  # session lost = race likely loading
+                return False  # Bug 6 fix: session lost = game died, not success
             if s.get('dogame_state', 0) >= 4 or s.get('game_state', 0) != 0:
                 break
             time.sleep(0.2)

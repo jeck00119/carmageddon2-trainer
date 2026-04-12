@@ -127,6 +127,10 @@ class BackendBridge(QObject):
         return True
 
     def attach_or_spawn(self):
+        # Bug 5 fix: don't double-attach on rapid clicks
+        if self.is_attached():
+            self._emit_log('already attached')
+            return
         try:
             if self.backend.attach_running():
                 self._emit_log(f'attached to running process pid={self.backend.pid}')
