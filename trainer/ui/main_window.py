@@ -2,11 +2,10 @@
 import ctypes
 import ctypes.wintypes
 import sys
-import webbrowser
 
-from PySide6.QtCore import QAbstractNativeEventFilter, QSettings, QTimer, Qt
-from PySide6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout,
-                                QLabel, QMainWindow, QMessageBox, QPushButton,
+from PySide6.QtCore import QSettings, QTimer, Qt
+from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout,
+                                QLabel, QMainWindow, QPushButton,
                                 QStatusBar, QTabWidget, QVBoxLayout, QWidget)
 
 from ui.bridge import BackendBridge
@@ -14,29 +13,6 @@ from ui.tab_dev import DevTab
 from ui.tab_powerups import PowerupTab
 from ui.tab_race import RaceTab
 from ui.tab_status import MENU_NAMES, StatusTab
-
-
-WM_HOTKEY = 0x0312
-MOD_CONTROL = 0x0002
-MOD_SHIFT = 0x0004
-VK_W = 0x57
-HOTKEY_ID_ALT_ENTER = 0xC2A1
-
-
-class _HotkeyFilter(QAbstractNativeEventFilter):
-    def __init__(self, callback):
-        super().__init__()
-        self.cb = callback
-
-    def nativeEventFilter(self, eventType, message):
-        try:
-            if bytes(eventType).startswith(b'windows'):
-                msg = ctypes.wintypes.MSG.from_address(int(message))
-                if msg.message == WM_HOTKEY:
-                    self.cb(int(msg.wParam))
-        except Exception:
-            pass
-        return False, 0
 
 
 class MainWindow(QMainWindow):
@@ -50,7 +26,6 @@ class MainWindow(QMainWindow):
         self.bridge.attached_changed.connect(self._on_attached_changed)
         self.bridge.op_finished.connect(self._on_op_finished)
         self.bridge.game_not_found.connect(self._on_game_not_found)
-        self.bridge.nglide_changed.connect(self._on_nglide_changed)
 
         # --- Top bar: title + attach controls ---
         top = QWidget()
@@ -81,32 +56,6 @@ class MainWindow(QMainWindow):
         self.btn_detach.clicked.connect(self.bridge.detach)
         self.btn_detach.setEnabled(False)
         top_lay.addWidget(self.btn_detach)
-
-        self.cb_windowed = QCheckBox('Start in windowed')
-        self.cb_windowed.setToolTip(
-            'When enabled, the trainer toggles to windowed mode automatically '
-            'after spawning the game. Requires nGlide.')
-        top_lay.addWidget(self.cb_windowed)
-
-        self.btn_toggle_window = QPushButton('Windowed ⇄')
-        self.btn_toggle_window.setMinimumHeight(36)
-        self.btn_toggle_window.setToolTip(
-            'Toggle between windowed and fullscreen at runtime '
-            '(or use the global Ctrl+Shift+W hotkey). Requires nGlide.')
-        self.btn_toggle_window.setEnabled(False)
-        self.btn_toggle_window.clicked.connect(self.bridge.alt_enter)
-        top_lay.addWidget(self.btn_toggle_window)
-
-        # Disable windowed controls if nGlide not compatible
-        info = self.bridge.nglide_info
-        if not self.bridge.has_nglide:
-            self.cb_windowed.setEnabled(False)
-            tip = 'nGlide not installed — windowed mode unavailable'
-            if info.get('found') and not info.get('ok'):
-                tip = (f'nGlide version too old ({info.get("version") or "unknown"}, '
-                       f'{info.get("size")} bytes) — need v2.0+ for windowed mode')
-            self.cb_windowed.setToolTip(tip)
-            self.btn_toggle_window.setToolTip(tip)
 
         # --- Tabs ---
         self.tabs = QTabWidget()
@@ -144,55 +93,8 @@ class MainWindow(QMainWindow):
         if geom:
             self.restoreGeometry(geom)
 
-        # --- Global hotkey: Ctrl+Shift+W -> toggle windowed ---
-        self._hk_filter = _HotkeyFilter(self._on_hotkey)
-        QApplication.instance().installNativeEventFilter(self._hk_filter)
-        try:
-            ok = ctypes.windll.user32.RegisterHotKey(
-                None, HOTKEY_ID_ALT_ENTER,
-                MOD_CONTROL | MOD_SHIFT, VK_W)
-            if ok:
-                self.status.showMessage('Global hotkey: Ctrl+Shift+W = toggle windowed', 8000)
-        except Exception:
-            pass
-
-    def _on_hotkey(self, hk_id: int):
-        if hk_id == HOTKEY_ID_ALT_ENTER:
-            if not self.bridge.has_nglide:
-                return
-            self.bridge.alt_enter()
-
     def _attach_clicked(self):
-        if self.cb_windowed.isChecked() and not self.bridge.has_nglide:
-            self._prompt_nglide_download()
-            return
-        self.bridge.wants_windowed = self.cb_windowed.isChecked()
         self.bridge.attach_or_spawn()
-
-    def _on_nglide_changed(self, present: bool):
-        self.cb_windowed.setEnabled(present)
-        if present:
-            self.cb_windowed.setToolTip(
-                'When enabled, the trainer toggles to windowed mode automatically '
-                'after spawning the game. Requires nGlide.')
-            self.btn_toggle_window.setToolTip(
-                'Toggle between windowed and fullscreen at runtime '
-                '(or use the global Ctrl+Shift+W hotkey).')
-        else:
-            self.cb_windowed.setChecked(False)
-            self.cb_windowed.setToolTip('nGlide not installed — windowed mode unavailable')
-            self.btn_toggle_window.setToolTip('nGlide not installed — windowed mode unavailable')
-
-    def _prompt_nglide_download(self):
-        reply = QMessageBox.question(
-            self, 'nGlide Required',
-            'Windowed mode requires nGlide (a free Glide wrapper).\n\n'
-            'The game will still work in fullscreen without it.\n\n'
-            'Open the nGlide download page?',
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-        if reply == QMessageBox.Yes:
-            webbrowser.open('https://www.zeus-software.com/downloads/nglide')
-        self.cb_windowed.setChecked(False)
 
     def _on_game_not_found(self):
         self._browse_game_exe()
@@ -223,13 +125,11 @@ class MainWindow(QMainWindow):
             self.lbl_state.setStyleSheet('color: #4ec27a; font-weight: 600;')
             self.btn_attach.setEnabled(False)
             self.btn_detach.setEnabled(True)
-            self.btn_toggle_window.setEnabled(self.bridge.has_nglide)
         else:
             self.lbl_state.setText('●  Detached')
             self.lbl_state.setStyleSheet('color: #e85050; font-weight: 600;')
             self.btn_attach.setEnabled(True)
             self.btn_detach.setEnabled(False)
-            self.btn_toggle_window.setEnabled(False)
 
     def _on_op_finished(self, op_name: str, result):
         self.status.showMessage(f'{op_name}: {result}', 5000)
@@ -269,10 +169,6 @@ class MainWindow(QMainWindow):
             pass
 
     def closeEvent(self, ev):
-        try:
-            ctypes.windll.user32.UnregisterHotKey(None, HOTKEY_ID_ALT_ENTER)
-        except Exception:
-            pass
         self.settings.setValue('geometry', self.saveGeometry())
         if hasattr(self.bridge, '_worker') and self.bridge._worker and self.bridge._worker.isRunning():
             self.bridge._worker.wait(2000)

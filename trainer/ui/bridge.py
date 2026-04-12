@@ -7,16 +7,14 @@ worker so the UI stays responsive.
 """
 import os
 import sys
-import threading
 import time
-import traceback
 
 from PySide6.QtCore import QObject, QSettings, QThread, Signal
 
 from backend.cheat_db import load_cheat_table, powerups_only
 from backend.dev_actions import find_action
 from backend.frida_core import (
-    Carma2Backend, check_nglide, ensure_dgvoodoo, ensure_nglide, find_game,
+    Carma2Backend, check_wrapper, ensure_dgvoodoo, find_game,
 )
 
 DEFAULT_FAVORITES = ['WHIZZ', 'MINGMING', 'WETWET', 'BIGTWAT', 'MOONINGMINNIE']
@@ -29,18 +27,13 @@ class BackendBridge(QObject):
     favorites_changed = Signal()
     snap_updated    = Signal(dict)
 
-    kbd_proc_captured = Signal(str)
-    toggle_ready      = Signal()
-
     _AGENT_DISPATCH = {
-        'kbd_proc':    '_handle_kbd_proc',
-        'toggle_ready':'_handle_toggle_ready',
         'log':         '_handle_agent_log',
         'init_done':   '_handle_init_done',
     }
 
     game_not_found = Signal()
-    nglide_changed = Signal(bool)
+    wrapper_changed = Signal(bool)   # True = wrapper OK (dgVoodoo installed)
 
     def __init__(self):
         super().__init__()
@@ -51,13 +44,10 @@ class BackendBridge(QObject):
         self._settings.setValue('game_exe', game_exe or '')
 
         if game_exe:
-            # Prefer dgVoodoo 2 (proper windowed / Alt+Tab). Falls back to
-            # the bundled nGlide only if the dgVoodoo bundle is missing.
-            if not ensure_dgvoodoo(os.path.dirname(game_exe)):
-                ensure_nglide(os.path.dirname(game_exe))
-        nglide_info = check_nglide(os.path.dirname(game_exe)) if game_exe else {'ok': False}
-        self.has_nglide = nglide_info.get('ok', False)
-        self.nglide_info = nglide_info
+            ensure_dgvoodoo(os.path.dirname(game_exe))
+        wrapper_info = check_wrapper(os.path.dirname(game_exe)) if game_exe else {'ok': False}
+        self.has_wrapper = wrapper_info.get('ok', False)
+        self.wrapper_info = wrapper_info
 
         self.backend = Carma2Backend(
             on_event=self._on_event,
@@ -65,8 +55,6 @@ class BackendBridge(QObject):
             game_exe=game_exe,
         )
         self._worker: Worker | None = None
-        self.kbd_proc_addr: str = ''
-        self.wants_windowed = False
         self.cheat_entries = load_cheat_table()
         self.powerup_entries = powerups_only(self.cheat_entries)
 
@@ -108,25 +96,6 @@ class BackendBridge(QObject):
         except Exception:
             pass
 
-    def _handle_kbd_proc(self, e: dict):
-        self.kbd_proc_addr = e.get('addr', '')
-        self._emit_log(f'nGlide WH_KEYBOARD proc captured @ {self.kbd_proc_addr}')
-        self.kbd_proc_captured.emit(self.kbd_proc_addr)
-
-    def _handle_toggle_ready(self, e: dict):
-        self._emit_log('nGlide toggle addresses extracted — windowed toggle ready')
-        self.toggle_ready.emit()
-        if self.wants_windowed:
-            self.wants_windowed = False
-            self._emit_log('Auto-toggling to windowed mode in 2s...')
-            threading.Timer(2.0, self._safe_alt_enter_timer).start()
-
-    def _safe_alt_enter_timer(self):
-        try:
-            self.alt_enter()
-        except Exception:
-            pass
-
     def _handle_agent_log(self, e: dict):
         self._emit_log(f'[agent] {e.get("msg", "")}')
 
@@ -148,13 +117,12 @@ class BackendBridge(QObject):
             return False
         self.backend.set_game_path(path)
         self._settings.setValue('game_exe', path)
-        old_nglide = self.has_nglide
-        if not ensure_dgvoodoo(os.path.dirname(path)):
-            ensure_nglide(os.path.dirname(path))
-        self.nglide_info = check_nglide(os.path.dirname(path))
-        self.has_nglide = self.nglide_info.get('ok', False)
-        if self.has_nglide != old_nglide:
-            self.nglide_changed.emit(self.has_nglide)
+        old = self.has_wrapper
+        ensure_dgvoodoo(os.path.dirname(path))
+        self.wrapper_info = check_wrapper(os.path.dirname(path))
+        self.has_wrapper = self.wrapper_info.get('ok', False)
+        if self.has_wrapper != old:
+            self.wrapper_changed.emit(self.has_wrapper)
         self._emit_log(f'Game path: {path}')
         return True
 
@@ -204,7 +172,6 @@ class BackendBridge(QObject):
         if not self.is_attached():
             self._emit_log(f'{op_label}: not attached')
             return None
-        # Enforce cooldown between rapid calls
         now = time.monotonic()
         elapsed = now - self._last_rpc_time
         if elapsed < self._RPC_COOLDOWN:
@@ -255,9 +222,6 @@ class BackendBridge(QObject):
 
     def auto_start_race(self):
         self.run_async('auto_start_race', self.backend.auto_start_race)
-
-    def alt_enter(self):
-        return self._safe_call('alt+enter', self.backend.alt_enter)
 
 
 class Worker(QThread):

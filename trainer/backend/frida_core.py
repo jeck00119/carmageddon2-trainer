@@ -29,9 +29,6 @@ KNOWN_EXE_MD5 = '66a9c49483ff4415b518bb7df01385bd'
 
 AGENT_JS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent.js')
 
-KNOWN_NGLIDE_SIZE = 1630208
-NGLIDE_BUNDLED = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'deps', 'glide2x.dll')
-
 DGVOODOO_BUNDLED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'deps', 'dgvoodoo')
 DGVOODOO_FILES = [
     ('Glide.dll',       'glide.dll'),
@@ -139,77 +136,24 @@ def _get_steam_libraries(steam_path: str) -> list[str]:
     return libs
 
 
-def check_nglide(game_dir: str) -> dict:
-    """Check nGlide status in the game folder."""
-    result = {'found': False, 'version': '', 'size': 0, 'path': '', 'ok': False}
+def check_wrapper(game_dir: str) -> dict:
+    """Detect which Glide wrapper is installed in the game folder."""
+    result = {'type': 'none', 'ok': False, 'path': ''}
     if not game_dir:
         return result
     dll = os.path.join(game_dir, 'glide2x.dll')
     if not os.path.isfile(dll):
         return result
-    result['found'] = True
     result['path'] = dll
-    result['size'] = os.path.getsize(dll)
-
-    try:
-        import ctypes
-        size = ctypes.windll.version.GetFileVersionInfoSizeW(dll, None)
-        if size:
-            buf = ctypes.create_string_buffer(size)
-            ctypes.windll.version.GetFileVersionInfoW(dll, 0, size, buf)
-            p = ctypes.c_void_p()
-            l = ctypes.c_uint()
-            if ctypes.windll.version.VerQueryValueW(buf, '\\\\', ctypes.byref(p), ctypes.byref(l)):
-                import struct
-                info = ctypes.string_at(p.value, l.value)
-                if len(info) >= 48:
-                    ms, ls = struct.unpack_from('<II', info, 8)
-                    result['version'] = f'{ms >> 16}.{ms & 0xffff}'
-    except Exception:
-        pass
-
-    if result['version']:
-        try:
-            result['ok'] = int(result['version'].split('.')[0]) >= 2
-        except ValueError:
-            result['ok'] = result['size'] > 150_000
+    if _is_dgvoodoo_glide(dll):
+        result['type'] = 'dgvoodoo'
+        result['ok'] = True
+        # Also check ddraw.dll is present (required for Alt+Tab)
+        result['has_ddraw'] = os.path.isfile(os.path.join(game_dir, 'ddraw.dll'))
     else:
-        result['ok'] = result['size'] > 150_000
+        result['type'] = 'other'
+        result['ok'] = os.path.getsize(dll) > 100_000
     return result
-
-
-def ensure_nglide(game_dir: str) -> bool:
-    """If game folder has wrong-sized glide2x.dll, replace with bundled copy.
-
-    Leaves dgVoodoo 2's Glide wrapper alone — users may deliberately install
-    dgVoodoo for proper windowed / Alt+Tab support, and we must not clobber it.
-    """
-    if not game_dir:
-        return False
-    dst = os.path.join(game_dir, 'glide2x.dll')
-    bundled = os.path.abspath(NGLIDE_BUNDLED)
-
-    if not os.path.isfile(bundled) or os.path.getsize(bundled) != KNOWN_NGLIDE_SIZE:
-        return False
-
-    # Don't touch dgVoodoo — that's a user choice, and installing nGlide over it
-    # would break their setup. Just return OK.
-    if _is_dgvoodoo_glide(dst):
-        return True
-
-    if os.path.isfile(dst):
-        if os.path.getsize(dst) == KNOWN_NGLIDE_SIZE:
-            return True
-        try:
-            shutil.copy2(dst, dst + '.bak')
-        except Exception:
-            return False
-
-    try:
-        shutil.copy2(bundled, dst)
-        return True
-    except Exception:
-        return False
 
 
 def ensure_dgvoodoo(game_dir: str) -> bool:
@@ -436,9 +380,6 @@ class Carma2Backend:
 
     def fire_by_hash(self, h1: int, h2: int) -> str:
         return self._rpc('fire_by_hash', h1, h2)
-
-    def alt_enter(self) -> str:
-        return self._rpc('alt_enter')
 
     def fire_named(self, name: str) -> str:
         if name.upper() == 'HIDDEN':

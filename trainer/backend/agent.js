@@ -1,17 +1,17 @@
 // Carma2 trainer — Frida agent.
 //
 // Responsibilities:
-//   1. Input release           (user32 noops + dinput non-exclusive)
-//   2. No-minimize on focus loss (WndProc subclass)
-//   3. nGlide windowed toggle  (extracted from glide2x.dll WH_KEYBOARD proc)
-//   4. Cheat hash injection    (hooks GetCheatInputHash)
-//   5. Menu click reimpl       (calls menu_cleanup/init/finalize/postfx)
+//   1. Input release           (cursor noops + dinput non-exclusive)
+//   2. Alt+Tab fix             (block DInput WH_KEYBOARD_LL hook)
+//   3. Cheat hash injection    (hooks GetCheatInputHash)
+//   4. Menu click reimpl       (calls menu_cleanup/init/finalize/postfx)
+//
+// Windowed mode and Alt+Enter are handled natively by dgVoodoo 2.
 //
 // Exposed RPCs:
 //   snap()              -> {menu, sel, game_state, dogame_state, ...}
 //   clickSel(sel)       -> menu click reimpl
 //   fireByHash(h1, h2)  -> arm one-shot hash override
-//   altEnter()          -> toggle nGlide windowed/fullscreen
 
 // ===========================================================================
 // Helpers
@@ -86,105 +86,20 @@ var DEV = {
     FN_GONAD_OF_DEATH:    0x444f10,
 };
 
-// Win32 message IDs we care about (others early-exit)
-var WM_NULL             = 0x0000;
-var WM_ACTIVATE         = 0x0006;
-var WM_KILLFOCUS        = 0x0008;
-var WM_ACTIVATEAPP      = 0x001C;
-var WM_NCACTIVATE       = 0x0086;
-var WM_TRAINER_ALTENTER = 0x8001;   // custom: trigger windowed toggle on main thread
-var WA_INACTIVE         = 0;
-
 // ===========================================================================
 // Mutable state
 // ===========================================================================
-var gameHwnd            = NULL;     // captured by WndProc subclass
-var nglideKeyboardProc  = NULL;     // first WH_KEYBOARD proc captured
-var nglideToggleFlag    = NULL;     // ASLR-shifted addr of windowed flag
-var nglideTogglePending = NULL;     // ASLR-shifted addr of pending flag
 var injectArmed         = false;    // one-shot cheat hash override armed
 var injectH1            = 0;
 var injectH2            = 0;
 
-
 // ===========================================================================
-// nGlide WH_KEYBOARD toggle extraction
-// ---------------------------------------------------------------------------
-// nGlide installs SetWindowsHookEx(WH_KEYBOARD=2, ...) with a proc inside
-// glide2x.dll. The proc detects Alt+Enter and flips two globals:
-//     mov [TOGGLE_PENDING], 1
-//     mov [TOGGLE_FLAG], eax     ; eax = old_flag XOR 1
-// We disassemble the proc once at install time, extract the addresses, then
-// write them directly. Bypasses every guard check inside the proc.
-// ===========================================================================
-function extractToggle(addr) {
-    try {
-        // Follow incremental-link thunk if present.
-        var firstInsn = Instruction.parse(addr);
-        var pc = (firstInsn.mnemonic === 'jmp') ? ptr(firstInsn.opStr) : addr;
-
-        var pastCall = false;
-        var sawPending = false;
-        for (var i = 0; i < 80; i++) {
-            var insn = Instruction.parse(pc);
-            if (!pastCall) {
-                if (insn.mnemonic === 'call') pastCall = true;
-            } else if (insn.mnemonic === 'mov') {
-                var m = insn.opStr.match(/\[0x([0-9a-f]+)\],\s*(\S+)/i);
-                if (m) {
-                    var addrVal = ptr('0x' + m[1]);
-                    if (!sawPending && m[2] === '1') {
-                        nglideTogglePending = addrVal;
-                        sawPending = true;
-                    } else if (sawPending && m[2] === 'eax') {
-                        nglideToggleFlag = addrVal;
-                        send({h: 'log', msg: 'toggle extracted: flag=' +
-                              nglideToggleFlag.toString() + ' pending=' +
-                              nglideTogglePending.toString()});
-                        send({h: 'toggle_ready'});
-                        return;
-                    }
-                }
-            }
-            pc = insn.next;
-        }
-        send({h: 'log', msg: 'extractToggle: pattern not found'});
-    } catch (e) {
-        send({h: 'log', msg: 'extractToggle error: ' + e});
-    }
-}
-
-function doToggle() {
-    if (nglideToggleFlag.isNull() || nglideTogglePending.isNull()) {
-        send({h: 'log', msg: 'toggle: not extracted yet'});
-        return;
-    }
-    try {
-        var newFlag = nglideToggleFlag.readU32() ^ 1;
-        nglideTogglePending.writeU32(1);
-        nglideToggleFlag.writeU32(newFlag);
-    } catch (e) {
-        send({h: 'log', msg: 'toggle exception: ' + e});
-    }
-}
-
-// ===========================================================================
-// user32 hooks (single block)
+// user32 hooks
 // ===========================================================================
 var u32 = Process.findModuleByName('user32.dll');
-var postMessageA = null;
 
 if (u32) {
-    try {
-        postMessageA = new NativeFunction(u32.getExportByName('PostMessageA'),
-            'int', ['pointer', 'uint32', 'uint32', 'uint32'], 'stdcall');
-    } catch (e) {}
-
-    // ---- Input release: only stop the game from locking/capturing the cursor ----
-    // NOTE: We used to noop SetForegroundWindow/BringWindowToTop/SetActiveWindow/
-    // SetWindowPos too, but those broke Alt+Tab by preventing Windows from
-    // transferring focus. Now we only neutralize cursor-grabbing APIs so the
-    // mouse stays free in windowed mode — focus transitions work normally.
+    // ---- Cursor release: stop the game from locking/capturing the cursor ----
     function noop(name, ret, sig) {
         try {
             Interceptor.replace(u32.getExportByName(name),
@@ -194,90 +109,22 @@ if (u32) {
     noop('ClipCursor', 1,      ['int',     ['pointer'], 'stdcall']);
     noop('SetCapture', ptr(0), ['pointer', ['pointer'], 'stdcall']);
 
-    // ---- WndProc subclass (only for WM_TRAINER_ALTENTER custom dispatch) ----
-    // We hook the game's WndProc to capture the hwnd and to intercept our
-    // custom WM_TRAINER_ALTENTER message (posted by the trainer to toggle
-    // windowed mode on the main thread). We do NOT swallow focus-loss
-    // messages anymore — that broke Alt+Tab.
-    var hookedProcs = {};
-
-    function hookWndProc(addr) {
-        var key = addr.toString();
-        if (hookedProcs[key]) return;
-        hookedProcs[key] = true;
-        try {
-            Interceptor.attach(addr, {
-                onEnter: function (args) {
-                    if (gameHwnd.isNull()) {
-                        gameHwnd = args[0];
-                    }
-                    var msg = args[1].toInt32();
-                    if (msg === WM_TRAINER_ALTENTER) {
-                        doToggle();
-                        // Rewrite to WM_NULL so the game's WndProc doesn't
-                        // see our custom message.
-                        args[1] = ptr(WM_NULL);
-                        args[2] = ptr(0);
-                        args[3] = ptr(0);
-                    }
-                }
-            });
-        } catch (e) { send({h: 'log', msg: 'hookWndProc FAILED @' + addr + ': ' + e}); }
-    }
-
-    // Capture the game's WndProc by snooping RegisterClass[Ex]A/W.
-    function captureFromRegister(name, wpOffset) {
-        try {
-            Interceptor.attach(u32.getExportByName(name), {
-                onEnter: function (args) {
-                    try {
-                        var wp = args[0].add(wpOffset).readPointer();
-                        if (!wp.isNull()) hookWndProc(wp);
-                    } catch (e) { send({h: 'log', msg: name + ' readPointer failed: ' + e}); }
-                }
-            });
-        } catch (e) {}
-    }
-    // WNDCLASSA   layout: style@+0, lpfnWndProc@+4
-    // WNDCLASSEXA layout: cbSize@+0, style@+4, lpfnWndProc@+8
-    captureFromRegister('RegisterClassA',   4);
-    captureFromRegister('RegisterClassW',   4);
-    captureFromRegister('RegisterClassExA', 8);
-    captureFromRegister('RegisterClassExW', 8);
-
-    // ---- Intercept SetWindowsHookEx for two reasons ----
-    // 1. Capture nGlide's WH_KEYBOARD hook proc (type 2) for Alt+Enter toggle
-    // 2. BLOCK DirectInput's WH_KEYBOARD_LL hook (type 13) — that low-level
-    //    keyboard hook eats Alt+Tab before Windows' shell processes it, which
-    //    is why Alt+Tab does nothing in the game.
-    //
-    // Implementation: in onEnter we detect WH_KEYBOARD_LL and mark it. We
-    // also rewrite the hook type to an invalid value (99) so the real
-    // SetWindowsHookEx returns NULL (= install failed). Then in onLeave we
-    // overwrite the NULL return with a fake non-NULL handle, so the caller
-    // (DINPUT.dll) thinks the install succeeded and moves on.
+    // ---- Block DInput's WH_KEYBOARD_LL hook ----
+    // DirectInput installs a low-level keyboard hook that eats system keys
+    // (Alt+Tab, Win) before the Windows shell processes them. We rewrite the
+    // hook type to an invalid value so the real call fails, then fake success
+    // so DInput moves on without knowing the install was suppressed.
     function hookSetWHE(name) {
         try {
             Interceptor.attach(u32.getExportByName(name), {
                 onEnter: function (args) {
-                    var idHook = args[0].toInt32();
-                    // WH_KEYBOARD = 2: capture nGlide's hook proc
-                    if (idHook === 2 && nglideKeyboardProc.isNull()) {
-                        nglideKeyboardProc = args[1];
-                        send({h: 'kbd_proc', addr: nglideKeyboardProc.toString()});
-                        extractToggle(nglideKeyboardProc);
-                    }
-                    // WH_KEYBOARD_LL = 13: block DirectInput's low-level
-                    // keyboard eater.
-                    if (idHook === 13) {
+                    if (args[0].toInt32() === 13) { // WH_KEYBOARD_LL
                         this.blocked = true;
-                        // Rewrite hook type to invalid → real call returns NULL
                         args[0] = ptr(99);
                     }
                 },
                 onLeave: function (retval) {
                     if (this.blocked) {
-                        // Fake a successful install so DINPUT moves on.
                         retval.replace(ptr(0xDEADBEEF));
                         send({h: 'log', msg: 'BLOCKED WH_KEYBOARD_LL install'});
                     }
@@ -477,13 +324,6 @@ rpc.exports = {
         injectArmed = true;
         return 'armed';
     },
-    altEnter: function () {
-        if (gameHwnd.isNull() || postMessageA === null) return 'no_hwnd';
-        if (nglideToggleFlag.isNull()) return 'no_toggle';
-        postMessageA(gameHwnd, WM_TRAINER_ALTENTER, 0, 0);
-        return 'posted';
-    },
-
     // ===== Dev cheat RPCs =====
     devEnable:     function () { wr32(DEV.CHEAT_MODE, DEV.MODE_VALUE); return 'on'; },
     devDisable:    function () { wr32(DEV.CHEAT_MODE, 0); return 'off'; },

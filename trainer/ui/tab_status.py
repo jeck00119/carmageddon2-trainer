@@ -51,20 +51,20 @@ class StatusTab(QWidget):
         path_row.addWidget(btn_browse)
         conn.addRow('Game:', path_row)
 
-        # nGlide status
-        info = self.bridge.nglide_info
-        if info.get('ok'):
-            nglide_text = f'nGlide {info.get("version") or "?"} ({info.get("size", 0) // 1024}KB)'
-            nglide_style = 'color: #4ec27a;'
-        elif info.get('found'):
-            nglide_text = f'Old version ({info.get("version") or "?"}, {info.get("size", 0) // 1024}KB) — need v2.0+'
-            nglide_style = 'color: #e0b341;'
+        # Wrapper status (dgVoodoo 2)
+        wi = self.bridge.wrapper_info
+        if wi.get('type') == 'dgvoodoo':
+            wrapper_text = 'dgVoodoo 2 (Alt+Tab / windowed OK)'
+            wrapper_style = 'color: #4ec27a;'
+        elif wi.get('ok'):
+            wrapper_text = 'Glide wrapper present'
+            wrapper_style = 'color: #e0b341;'
         else:
-            nglide_text = 'Not installed — windowed mode unavailable'
-            nglide_style = 'color: #e85050;'
-        self.lbl_nglide = QLabel(nglide_text)
-        self.lbl_nglide.setStyleSheet(f'{nglide_style} font-size: 9pt;')
-        conn.addRow('nGlide:', self.lbl_nglide)
+            wrapper_text = 'Not installed'
+            wrapper_style = 'color: #e85050;'
+        self.lbl_wrapper = QLabel(wrapper_text)
+        self.lbl_wrapper.setStyleSheet(f'{wrapper_style} font-size: 9pt;')
+        conn.addRow('Wrapper:', self.lbl_wrapper)
 
         layout.addWidget(conn_box)
 
