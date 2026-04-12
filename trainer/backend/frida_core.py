@@ -34,7 +34,6 @@ DGVOODOO_FILES = [
     ('Glide.dll',       'glide.dll'),
     ('Glide2x.dll',     'glide2x.dll'),
     ('Glide3x.dll',     'glide3x.dll'),
-    ('DDraw.dll',       'ddraw.dll'),     # intercepts DirectDraw exclusive mode
     ('dgVoodoo.conf',   'dgVoodoo.conf'),
     ('dgVoodooCpl.exe', 'dgVoodooCpl.exe'),
 ]
@@ -148,8 +147,6 @@ def check_wrapper(game_dir: str) -> dict:
     if _is_dgvoodoo_glide(dll):
         result['type'] = 'dgvoodoo'
         result['ok'] = True
-        # Also check ddraw.dll is present (required for Alt+Tab)
-        result['has_ddraw'] = os.path.isfile(os.path.join(game_dir, 'ddraw.dll'))
     else:
         result['type'] = 'other'
         result['ok'] = os.path.getsize(dll) > 100_000
