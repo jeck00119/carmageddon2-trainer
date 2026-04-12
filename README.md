@@ -44,14 +44,14 @@ Requires Python 3.10+, `frida`, `PySide6`. See [`trainer/README.md`](trainer/REA
 
 **4 tabs:**
 - **Race** — auto-start race, finish race, cheat mode, fly mode, favorites
-- **Dev cheats** — 48 buttons across 13 groups with search filter, live state labels, powerup spawner with name dropdown
+- **Dev cheats** — 21 buttons across 9 groups, live state labels
 - **Powerups** — 89-button grid with search, right-click to pin favorites
-- **Status** — connection state, advanced mode toggle
+- **Status** — connection state, wrapper status
 
 **Features:**
 - Spawns or attaches to the game process
-- No-minimize on alt-tab (WndProc subclass)
-- Windowed mode toggle (Ctrl+Shift+W global hotkey)
+- Alt+Tab works normally (own WH_KEYBOARD_LL hook + DInput non-exclusive)
+- Windowed mode via dgVoodoo 2 (Alt+Enter toggles fullscreen)
 - Disabled-when-detached buttons, session loss detection with auto-reconnect
 - All cheats fire via hash injection on the game's own thread — no crashes
 
@@ -211,7 +211,7 @@ Function `0x00443c50` (called from inside the menu screen handler `0x0046a0e0` a
 | `0x00470a90` | `menu_finalize(ecx = old_menu, edx = new_menu)` — fastcall. Updates item-state carry-over between two menus. | Runtime verified |
 | `0x00467a70` | `menu_postfx(this = new_menu)` — thiscall. Final setup after a transition. | Runtime verified |
 | `0x00500760` | DirectDraw setup dispatcher — branches on `[0x6aa9e0]`. The `je 0x00500795` at `0x0050077b` is the windowed-vs-fullscreen branch. | Discovered via `LocalWindowedDDSetup` string xref |
-| `0x005000a0` | `LocalWindowedDDSetup` — actual windowed-mode DirectDraw init. Internal "windowed mode" exists but is wired to a flag with no CLI toggle. (Patching the flag *did* take the windowed branch but nGlide overrides the display setup, so this is a dead code path in the Steam build.) | Static |
+| `0x005000a0` | `LocalWindowedDDSetup` — actual windowed-mode DirectDraw init. Internal "windowed mode" exists but is wired to a flag with no CLI toggle. Dead code path in the Steam build — the Glide wrapper (dgVoodoo 2) handles display setup. | Static |
 
 ### Data (globals)
 
@@ -228,7 +228,7 @@ Function `0x00443c50` (called from inside the menu screen handler `0x0046a0e0` a
 | `0x007a06c0` | CD audio flag | Hidden cheat toggles it |
 | `0x0075bc04` | Hidden cheat side-effect flag (mystery — read in 7 places) | Hidden cheat sets it to 1 |
 | `0x0075bc24` | DoGame state machine variable (0..6) | Switch jump table at `0x00504154` |
-| `0x006aa9e0` | Internal windowed-mode flag (used by `0x00500760`'s branch). Setting it non-zero takes the windowed code path but **doesn't actually run windowed in the Steam build** — nGlide handles display setup separately. | Patched and verified the branch was taken |
+| `0x006aa9e0` | Internal windowed-mode flag (used by `0x00500760`'s branch). Setting it non-zero takes the windowed code path but **doesn't actually run windowed in the Steam build** — the Glide wrapper handles display setup separately. | Patched and verified the branch was taken |
 
 ### Menu structures (in `.data`)
 
