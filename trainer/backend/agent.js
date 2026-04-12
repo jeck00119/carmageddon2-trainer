@@ -109,11 +109,33 @@ if (u32) {
     noop('ClipCursor', 1,      ['int',     ['pointer'], 'stdcall']);
     noop('SetCapture', ptr(0), ['pointer', ['pointer'], 'stdcall']);
 
-    // ---- Block DInput's WH_KEYBOARD_LL hook ----
-    // DirectInput installs a low-level keyboard hook that eats system keys
-    // (Alt+Tab, Win) before the Windows shell processes them. We rewrite the
-    // hook type to an invalid value so the real call fails, then fake success
-    // so DInput moves on without knowing the install was suppressed.
+    // ---- Alt+Tab fix: own LL keyboard hook + block DInput's ----
+    // Two-part fix for system hotkeys (Alt+Tab, Win):
+    //
+    // Part 1: Install our own WH_KEYBOARD_LL hook that passes all keys
+    //   through via CallNextHookEx. This ensures the LL hook chain has
+    //   a well-behaved hook that forwards system keys to Windows. Without
+    //   this, RustDesk (and similar remote desktop tools) can't reliably
+    //   inject Alt+Tab into the remote session's LL hook chain.
+    //
+    // Part 2: Block DInput's WH_KEYBOARD_LL install. DInput installs a
+    //   LL hook that eats system keys before the shell sees them. We
+    //   rewrite the hook type to invalid so the real call fails, then
+    //   fake success so DInput moves on.
+    var ourLLHook = NULL;
+    try {
+        var _SetWindowsHookExA = new NativeFunction(u32.getExportByName('SetWindowsHookExA'),
+            'pointer', ['int', 'pointer', 'pointer', 'uint32'], 'stdcall');
+        var _CallNextHookEx = new NativeFunction(u32.getExportByName('CallNextHookEx'),
+            'pointer', ['pointer', 'pointer', 'uint32', 'pointer'], 'stdcall');
+
+        var llProc = new NativeCallback(function (nCode, wParam, lParam) {
+            return _CallNextHookEx(ourLLHook, ptr(nCode >= 0 ? nCode : 0), wParam, lParam);
+        }, 'pointer', ['int', 'pointer', 'pointer'], 'stdcall');
+
+        ourLLHook = _SetWindowsHookExA(13, llProc, ptr(0), 0);
+    } catch (e) {}
+
     function hookSetWHE(name) {
         try {
             Interceptor.attach(u32.getExportByName(name), {
