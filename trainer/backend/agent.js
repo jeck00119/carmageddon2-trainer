@@ -177,41 +177,13 @@ if (u32) {
 }
 
 // ===========================================================================
-// DirectInput non-exclusive (so the game doesn't grab mouse/keyboard)
+// DirectInput — leave the game's original cooperative level alone.
+// The game uses DISCL_NONEXCLUSIVE | DISCL_FOREGROUND (0x06), which is
+// correct: non-exclusive (shares input with other apps) + foreground-only
+// (stops receiving input when unfocused). We used to rewrite to BACKGROUND
+// but that caused the game to keep receiving input when Alt+Tabbed away.
+// The LL hook blocker + our own LL hook are sufficient for Alt+Tab.
 // ===========================================================================
-var dinputHooked = false;
-function tryHookDInput() {
-    if (dinputHooked) return;
-    var mod = Process.findModuleByName('dinput.dll');
-    if (!mod) return;
-    try {
-        Interceptor.attach(mod.getExportByName('DirectInputCreateA'), {
-            onEnter: function (args) { this.outPtr = args[2]; },
-            onLeave: function (retval) {
-                if (retval.toInt32() !== 0 || !this.outPtr) return;
-                var diObj = ptr(this.outPtr).readPointer();
-                var createDevice = diObj.readPointer().add(3 * 4).readPointer();
-                Interceptor.attach(createDevice, {
-                    onEnter: function (args) { this.outDev = args[2]; },
-                    onLeave: function (retval) {
-                        if (retval.toInt32() !== 0 || !this.outDev) return;
-                        var devObj = ptr(this.outDev).readPointer();
-                        var setCoop = devObj.readPointer().add(13 * 4).readPointer();
-                        Interceptor.attach(setCoop, {
-                            onEnter: function (args) { args[2] = ptr(2 | 8); }
-                        });
-                    }
-                });
-            }
-        });
-        dinputHooked = true;
-    } catch (e) { send({h: 'log', msg: 'DirectInput hook failed: ' + e}); }
-}
-tryHookDInput();
-try {
-    Interceptor.attach(Module.getGlobalExportByName('LoadLibraryA'),
-        { onLeave: function () { tryHookDInput(); } });
-} catch (e) {}
 
 // ===========================================================================
 // Cheat hash injection
