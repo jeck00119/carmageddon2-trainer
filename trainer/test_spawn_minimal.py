@@ -19,7 +19,8 @@ import os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import frida
-from backend.frida_core import find_game, ensure_dgvoodoo, _is_dgvoodoo_glide
+from backend.game_detect import find_game
+from backend.dgvoodoo import ensure_dgvoodoo, is_dgvoodoo_glide
 
 try: sys.stdout.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
 except Exception: pass
@@ -53,7 +54,7 @@ def main():
     if not ensure_dgvoodoo(game_dir):
         print('[!] ensure_dgvoodoo() failed — bundle missing or copy error')
         return 1
-    if not _is_dgvoodoo_glide(os.path.join(game_dir, 'glide2x.dll')):
+    if not is_dgvoodoo_glide(os.path.join(game_dir, 'glide2x.dll')):
         print('[!] dgVoodoo install did not take — glide2x.dll is not dgVoodoo')
         return 1
     print('[*] dgVoodoo 2 installed and verified')

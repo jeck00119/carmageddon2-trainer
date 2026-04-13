@@ -12,7 +12,8 @@ import os, sys, time, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import frida
-from backend.frida_core import find_game, ensure_dgvoodoo
+from backend.game_detect import find_game
+from backend.dgvoodoo import ensure_dgvoodoo
 
 try: sys.stdout.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
 except Exception: pass

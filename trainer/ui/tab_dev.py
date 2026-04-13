@@ -273,7 +273,7 @@ class DevTab(QWidget):
         btn: QPushButton = w['btn']
         if on:
             btn.setText('● Dev mode ACTIVE  (click to disable)')
-            btn.setStyleSheet('background: #4ec27a; color: black; font-weight: 700;')
+            btn.setStyleSheet(f'background: {GOOD}; color: black; font-weight: 700;')
         else:
             btn.setText('Enable dev mode')
             btn.setStyleSheet('')
