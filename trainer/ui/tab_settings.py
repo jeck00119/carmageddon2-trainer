@@ -44,8 +44,17 @@ SETTINGS = [
             'DISPLAY', 'FPS limit',
             'Cap the frame rate. 0 = unlimited.\n'
             'Useful if the game runs too fast on modern hardware.'),
+    Setting('Brightness', 'dgv', 'General', 'spin', [(0, 200, '')], '100',
+            'DISPLAY', 'Brightness',
+            'Display brightness. 100 = default.'),
+    Setting('Color', 'dgv', 'General', 'spin', [(0, 200, '')], '100',
+            'DISPLAY', 'Color saturation',
+            'Color intensity. 100 = default. Lower = more desaturated.'),
+    Setting('Contrast', 'dgv', 'General', 'spin', [(0, 200, '')], '100',
+            'DISPLAY', 'Contrast',
+            'Display contrast. 100 = default.'),
 
-    # --- GRAPHICS QUALITY ---
+    # --- GRAPHICS ---
     Setting('Resolution', 'dgv', 'Glide', 'combo',
             [('Native (640x480)', 'unforced'),
              ('Monitor resolution', 'max'),
@@ -54,7 +63,7 @@ SETTINGS = [
              ('1440p max', 'max_qhd'),
              ('2x (1280x960)', '2x'),
              ('4x (2560x1920)', '4x')],
-            'max', 'GRAPHICS QUALITY', 'Render resolution',
+            'max', 'GRAPHICS', 'Render resolution',
             'Internal rendering resolution.\n'
             '"Monitor resolution" = sharpest, uses your display\'s native pixels.\n'
             '"Native" = original 640x480 for an authentic 1998 look.'),
@@ -62,7 +71,7 @@ SETTINGS = [
             [('Off', 'off'),
              ('2x MSAA', '2x'), ('4x MSAA', '4x'),
              ('8x MSAA', '8x'), ('16x MSAA', '16x')],
-            '4x', 'GRAPHICS QUALITY', 'Antialiasing',
+            '4x', 'GRAPHICS', 'Antialiasing',
             'Multisample anti-aliasing — smooths jagged edges on 3D geometry.\n'
             '4x is a good balance of quality and performance.\n'
             'If you see rendering artifacts, try lowering or turning off.'),
@@ -70,7 +79,7 @@ SETTINGS = [
             [('Default', 'appdriven'),
              ('Point (sharp pixels)', 'pointsampled'),
              ('Bilinear (smooth)', 'bilinear')],
-            'bilinear', 'GRAPHICS QUALITY', 'Texture filtering',
+            'bilinear', 'GRAPHICS', 'Texture filtering',
             'How textures are sampled when viewed at an angle.\n'
             '"Default" = the game\'s original filtering.\n'
             '"Point" = sharp/blocky pixels. "Bilinear" = smooth blending.'),
@@ -80,56 +89,91 @@ SETTINGS = [
              ('Bicubic', 'bicubic'),
              ('Lanczos-2 (recommended)', 'lanczos-2'),
              ('Lanczos-3', 'lanczos-3')],
-            'lanczos-2', 'GRAPHICS QUALITY', 'Upscale filter',
+            'lanczos-2', 'GRAPHICS', 'Upscale filter',
             'Filter used to scale the rendered image to your screen.\n'
             'Only relevant when render resolution differs from your monitor.\n'
             'Lanczos-2 gives the best sharpness for most setups.'),
-
-    # --- GAME WORLD ---
-    Setting('Yon', 'opt', '', 'slider', [], '100.000000',
-            'GAME WORLD', 'Draw distance',
-            'How far you can see in the game world.\n'
-            'Higher = see further, but values above 50 may cause AI to behave oddly.'),
     Setting('RoadTexturingLevel', 'opt', '', 'combo',
             [('Off', '0'), ('On', '1')],
-            '1', 'GAME WORLD', 'Road textures',
-            'Texture mapping on road surfaces.\n'
-            'Off = solid color only.'),
+            '1', 'GRAPHICS', 'Road textures',
+            'Texture mapping on road surfaces. Off = solid color only.'),
     Setting('WallTexturingLevel', 'opt', '', 'combo',
             [('Off', '0'), ('Linear', '1'), ('Perspective-correct', '2')],
-            '2', 'GAME WORLD', 'Wall textures',
+            '2', 'GRAPHICS', 'Wall textures',
             'Texture mapping on walls and buildings.\n'
             '"Perspective-correct" reduces texture warping at angles.'),
     Setting('CarTexturingLevel', 'opt', '', 'combo',
             [('Off', '0'), ('Linear', '1'), ('Perspective-correct', '2')],
-            '2', 'GAME WORLD', 'Car textures',
+            '2', 'GRAPHICS', 'Car textures',
             'Texture mapping on vehicles.\n'
             '"Perspective-correct" reduces warping on angled surfaces.'),
     Setting('ShadowLevel', 'opt', '', 'combo',
             [('None', '0'), ('Cars only', '1'),
              ('Everything (cars + peds + props)', '3')],
-            '3', 'GAME WORLD', 'Shadows',
+            '3', 'GRAPHICS', 'Shadows',
             'Which objects cast shadows on the ground.'),
     Setting('SmokeOn', 'opt', '', 'check', [], '1',
-            'GAME WORLD', 'Smoke & particles',
+            'GRAPHICS', 'Smoke effects',
             'Show tire smoke, exhaust, and explosion particles.'),
-    Setting('AccessoryRendering', 'opt', '', 'check', [], '1',
-            'GAME WORLD', 'Props & scenery objects',
-            'Show destructible props like signs, fences, and cones.\n'
-            'Also affects collision with these objects.'),
     Setting('SkyTextureOn', 'opt', '', 'check', [], '1',
-            'GAME WORLD', 'Sky',
+            'GRAPHICS', 'Sky',
             'Show the sky texture. Off = solid color background.'),
     Setting('DepthCueingOn', 'opt', '', 'check', [], '1',
-            'GAME WORLD', 'Distance fog',
+            'GRAPHICS', 'Fog',
             'Fade distant objects into the background.\n'
             'Hides pop-in at the draw distance limit.'),
+
+    # --- GAMEPLAY ---
+    Setting('SkillLevel', 'opt', '', 'combo',
+            [('Easy', '0'), ('Normal', '1'), ('Hard', '2')],
+            '0', 'GAMEPLAY', 'Difficulty',
+            'AI opponent difficulty level.'),
+    Setting('GoreLevel', 'opt', '', 'combo',
+            [('Maximum', '0'), ('Medium', '1'), ('Minimal', '2')],
+            '0', 'GAMEPLAY', 'Gore level',
+            'Amount of blood and giblets.\n'
+            '0 = stomach-churning, 2 = nice and fluffy.'),
+    Setting('Yon', 'opt', '', 'slider', [(20, 200, 10, 20)], '100.000000',
+            'GAMEPLAY', 'Draw distance',
+            'How far you can see in the game world.\n'
+            'Higher = see further, but values above 50 may cause AI to behave oddly.'),
+    Setting('AccessoryRendering', 'opt', '', 'check', [], '1',
+            'GAMEPLAY', 'Scenery props',
+            'Show destructible props like signs, fences, and cones.\n'
+            'Also affects collision with these objects.'),
     Setting('AnimalsOn', 'opt', '', 'check', [], '1',
-            'GAME WORLD', 'Animals',
+            'GAMEPLAY', 'Animals',
             'Show animals in the game world (cows, dogs, etc).'),
     Setting('DronesOn', 'opt', '', 'check', [], '1',
-            'GAME WORLD', 'Civilian traffic',
+            'GAMEPLAY', 'Traffic',
             'Show civilian drone cars driving around the level.'),
+    Setting('MinesOn', 'opt', '', 'check', [], '1',
+            'GAMEPLAY', 'Mines',
+            'Enable mine pickups and deployment in levels.'),
+    Setting('FlameThrowerOn', 'opt', '', 'check', [], '1',
+            'GAMEPLAY', 'Ped flamethrowers',
+            'Some pedestrians carry flamethrowers and fight back.'),
+    Setting('MiniMapVisible', 'opt', '', 'check', [], '0',
+            'GAMEPLAY', 'Minimap',
+            'Show the minimap on the HUD.'),
+
+    # --- AUDIO ---
+    Setting('EVolume', 'opt', '', 'slider', [(0, 255, 5, 25)], '220',
+            'AUDIO', 'Effects volume',
+            'Volume for sound effects (impacts, engine, explosions).\n'
+            '0 = silent, 255 = maximum.'),
+    Setting('MVolume', 'opt', '', 'slider', [(0, 255, 5, 25)], '255',
+            'AUDIO', 'Music volume',
+            'Volume for background music.\n'
+            '0 = silent, 255 = maximum.'),
+    Setting('SoundDetailLevel', 'opt', '', 'combo',
+            [('Minimal', '0'), ('Medium', '1'), ('Full', '2')],
+            '2', 'AUDIO', 'Sound detail',
+            'How many objects produce sounds.\n'
+            '"Full" = most things make a sound. "Minimal" = only essential sounds.'),
+    Setting('AmbientSound', 'opt', '', 'check', [], '1',
+            'AUDIO', 'Ambient sounds',
+            'Environmental background audio (wind, birds, etc).'),
 ]
 
 
@@ -204,30 +248,39 @@ class SettingsTab(QWidget):
             self.widgets[s.key] = w
             form.addRow(s.label + ':', w)
         elif s.widget == 'slider':
+            # options = [(min, max, step, tick)] or empty for defaults
+            smin, smax, sstep, stick = (20, 200, 10, 20)
+            if s.options:
+                smin, smax, sstep, stick = s.options[0]
             row = QHBoxLayout()
             w = QSlider(Qt.Horizontal)
-            w.setMinimum(20)
-            w.setMaximum(200)
-            w.setSingleStep(10)
-            w.setTickInterval(20)
+            w.setMinimum(smin)
+            w.setMaximum(smax)
+            w.setSingleStep(sstep)
+            w.setTickInterval(stick)
             w.setTickPosition(QSlider.TicksBelow)
-            lbl = QLabel('100')
+            lbl = QLabel(str(smin))
             lbl.setMinimumWidth(30)
             w.valueChanged.connect(lambda v, l=lbl: l.setText(str(v)))
             row.addWidget(w, 1)
             row.addWidget(lbl)
-            note = QLabel('(>50 may affect AI)')
-            note.setStyleSheet(f'color: {TEXT_DIM}; font-size: 8pt;')
-            row.addWidget(note)
             if s.tip:
                 w.setToolTip(s.tip)
             self.widgets[s.key] = w
             form.addRow(s.label + ':', row)
         elif s.widget == 'spin':
             w = QSpinBox()
-            w.setMinimum(0)
-            w.setMaximum(240)
-            w.setSpecialValueText('Unlimited')
+            # options = [(min, max, special_text)] or empty for FPS default
+            if s.options:
+                smin, smax, special = s.options[0]
+                w.setMinimum(smin)
+                w.setMaximum(smax)
+                if special:
+                    w.setSpecialValueText(special)
+            else:
+                w.setMinimum(0)
+                w.setMaximum(240)
+                w.setSpecialValueText('Unlimited')
             if s.tip:
                 w.setToolTip(s.tip)
             self.widgets[s.key] = w
