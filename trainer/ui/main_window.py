@@ -12,8 +12,10 @@ from ui.bridge import BackendBridge
 from ui.tab_dev import DevTab
 from ui.tab_powerups import PowerupTab
 from ui.tab_race import RaceTab
+from backend.game_detect import MENU_NAMES
 from ui.tab_settings import SettingsTab
-from ui.tab_status import MENU_NAMES, StatusTab
+from ui.tab_status import StatusTab
+from ui.style import BAD, GOOD
 
 
 class MainWindow(QMainWindow):
@@ -41,7 +43,7 @@ class MainWindow(QMainWindow):
         top_lay.addSpacing(20)
 
         self.lbl_state = QLabel('●  Detached')
-        self.lbl_state.setStyleSheet('color: #e85050; font-weight: 600;')
+        self.lbl_state.setStyleSheet(f'color: {BAD}; font-weight: 600;')
         top_lay.addWidget(self.lbl_state)
 
         top_lay.addStretch()
@@ -125,12 +127,12 @@ class MainWindow(QMainWindow):
     def _on_attached_changed(self, attached: bool):
         if attached:
             self.lbl_state.setText(f'●  Attached  ·  pid {self.bridge.backend.pid}')
-            self.lbl_state.setStyleSheet('color: #4ec27a; font-weight: 600;')
+            self.lbl_state.setStyleSheet(f'color: {GOOD}; font-weight: 600;')
             self.btn_attach.setEnabled(False)
             self.btn_detach.setEnabled(True)
         else:
             self.lbl_state.setText('●  Detached')
-            self.lbl_state.setStyleSheet('color: #e85050; font-weight: 600;')
+            self.lbl_state.setStyleSheet(f'color: {BAD}; font-weight: 600;')
             self.btn_attach.setEnabled(True)
             self.btn_detach.setEnabled(False)
 

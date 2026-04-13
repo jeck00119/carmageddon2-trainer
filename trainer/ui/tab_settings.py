@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QGroupBox,
 
 from backend.config_io import (read_dgvoodoo, read_options_txt,
                                 write_dgvoodoo, write_options_txt)
+from ui.style import TEXT_DIM, WARN
 
 
 @dataclass
@@ -143,7 +144,7 @@ class SettingsTab(QWidget):
 
         # Warning banner
         warn = QLabel('Changes take effect on next game launch')
-        warn.setStyleSheet('color: #e0b341; font-style: italic; font-size: 10pt;')
+        warn.setStyleSheet(f'color: {WARN}; font-style: italic; font-size: 10pt;')
         outer.addWidget(warn)
 
         # Scroll area
@@ -214,7 +215,7 @@ class SettingsTab(QWidget):
             row.addWidget(w, 1)
             row.addWidget(lbl)
             note = QLabel('(>50 may affect AI)')
-            note.setStyleSheet('color: #888; font-size: 8pt;')
+            note.setStyleSheet(f'color: {TEXT_DIM}; font-size: 8pt;')
             row.addWidget(note)
             if s.tip:
                 w.setToolTip(s.tip)

@@ -2,233 +2,19 @@
 Frida backend for the Carma2 trainer.
 
 Wraps spawn/attach lifecycle and exposes a clean Python API on top of
-backend/agent.js.
+backend/agent.js. Game detection and dgVoodoo management are in separate
+modules (game_detect.py, dgvoodoo.py).
 """
 import os
-import shutil
-import string
-import sys
 import time
-import winreg
 from typing import Callable, Optional
-
-# Make carma2_tools/ importable so we can pull in hash_function etc.
-_TOOLS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-if _TOOLS_DIR not in sys.path:
-    sys.path.insert(0, _TOOLS_DIR)
 
 import frida
 
 from hash_function import KNOWN_CHEATS, carma2_hash, HIDDEN_CHEAT_HASH
-
-GAME_PROC_NAME = 'carma2_hw.exe'
-GAME_EXE_NAME = 'CARMA2_HW.EXE'
-
-KNOWN_EXE_SIZE = 2680320
-KNOWN_EXE_MD5 = '66a9c49483ff4415b518bb7df01385bd'
+from backend.game_detect import GAME_PROC_NAME, KNOWN_EXE_SIZE, KNOWN_EXE_MD5
 
 AGENT_JS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent.js')
-
-DGVOODOO_BUNDLED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'deps', 'dgvoodoo')
-DGVOODOO_FILES = [
-    ('Glide.dll',       'glide.dll'),
-    ('Glide2x.dll',     'glide2x.dll'),
-    ('Glide3x.dll',     'glide3x.dll'),
-    ('dgVoodoo.conf',   'dgVoodoo.conf'),
-    ('dgVoodooCpl.exe', 'dgVoodooCpl.exe'),
-]
-
-# Detect dgVoodoo 2's glide2x.dll so we don't replace it with nGlide.
-# dgVoodoo's Glide2x.dll is ~200 KB and contains the literal "dgVoodoo" in its
-# VERSIONINFO block as a UTF-16 string. Use a size-range + wide-string magic
-# check (robust across minor dgVoodoo versions).
-_DGVOODOO_MAGIC = 'dgVoodoo'.encode('utf-16-le')  # b'd\0g\0V\0o\0o\0d\0o\0o\0'
-
-def _is_dgvoodoo_glide(path: str) -> bool:
-    try:
-        if not os.path.isfile(path):
-            return False
-        size = os.path.getsize(path)
-        if not (100_000 <= size <= 400_000):
-            return False
-        with open(path, 'rb') as f:
-            data = f.read()
-        return _DGVOODOO_MAGIC in data
-    except Exception:
-        return False
-
-
-def find_game(saved_path: str = '') -> Optional[str]:
-    """Auto-detect the game EXE path."""
-    if saved_path and os.path.isfile(saved_path):
-        return saved_path
-
-    try:
-        device = frida.get_local_device()
-        for proc in device.enumerate_processes():
-            if proc.name.lower() == GAME_PROC_NAME:
-                path = _get_process_path(proc.pid)
-                if path and os.path.isfile(path):
-                    return path
-    except Exception:
-        pass
-
-    try:
-        steam_path = _get_steam_path()
-        if steam_path:
-            for lib_folder in _get_steam_libraries(steam_path):
-                candidate = os.path.join(lib_folder, 'steamapps', 'common',
-                                         'Carmageddon2', GAME_EXE_NAME)
-                if os.path.isfile(candidate):
-                    return candidate
-    except Exception:
-        pass
-
-    drives = [f'{d}:\\' for d in string.ascii_uppercase
-              if os.path.exists(f'{d}:\\')]
-    subdirs = [
-        os.path.join('Program Files (x86)', 'Steam', 'steamapps', 'common', 'Carmageddon2'),
-        os.path.join('Program Files', 'Steam', 'steamapps', 'common', 'Carmageddon2'),
-        os.path.join('Steam', 'steamapps', 'common', 'Carmageddon2'),
-        os.path.join('SteamLibrary', 'steamapps', 'common', 'Carmageddon2'),
-        os.path.join('Games', 'Carmageddon2'),
-        os.path.join('GOG Games', 'Carmageddon 2'),
-        os.path.join('GOG Games', 'Carmageddon2'),
-    ]
-    for drive in drives:
-        for sub in subdirs:
-            candidate = os.path.join(drive, sub, GAME_EXE_NAME)
-            if os.path.isfile(candidate):
-                return candidate
-
-    return None
-
-
-def _get_steam_path() -> Optional[str]:
-    try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Valve\Steam')
-        val, _ = winreg.QueryValueEx(key, 'SteamPath')
-        winreg.CloseKey(key)
-        return val.replace('/', '\\')
-    except Exception:
-        return None
-
-
-def _get_steam_libraries(steam_path: str) -> list[str]:
-    libs = [steam_path]
-    vdf = os.path.join(steam_path, 'steamapps', 'libraryfolders.vdf')
-    if not os.path.isfile(vdf):
-        vdf = os.path.join(steam_path, 'config', 'libraryfolders.vdf')
-    if os.path.isfile(vdf):
-        try:
-            with open(vdf, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if '"path"' in line:
-                        parts = line.split('"')
-                        if len(parts) >= 4:
-                            path = parts[3].replace('\\\\', '\\')
-                            if os.path.isdir(path) and path not in libs:
-                                libs.append(path)
-        except Exception:
-            pass
-    return libs
-
-
-def check_wrapper(game_dir: str) -> dict:
-    """Detect which Glide wrapper is installed in the game folder."""
-    result = {'type': 'none', 'ok': False, 'path': ''}
-    if not game_dir:
-        return result
-    dll = os.path.join(game_dir, 'glide2x.dll')
-    if not os.path.isfile(dll):
-        return result
-    result['path'] = dll
-    if _is_dgvoodoo_glide(dll):
-        result['type'] = 'dgvoodoo'
-        result['ok'] = True
-    else:
-        result['type'] = 'other'
-        result['ok'] = os.path.getsize(dll) > 100_000
-    return result
-
-
-def ensure_dgvoodoo(game_dir: str) -> bool:
-    """Install the bundled dgVoodoo 2 Glide wrapper into the game folder.
-
-    dgVoodoo 2 fixes windowed mode, Alt+Enter, Alt+Tab and focus-loss
-    handling for Carmageddon 2, which nGlide does not. On first run the
-    trainer copies the bundled Glide DLLs + conf + control panel into the
-    game folder, backing up any existing glide*.dll to glide*.dll.bak_nglide.
-
-    Idempotent: if the installed glide2x.dll already matches the bundled
-    version (by dgVoodoo signature), does nothing and returns True.
-    """
-    if not game_dir or not os.path.isdir(game_dir):
-        return False
-    src_dir = os.path.abspath(DGVOODOO_BUNDLED_DIR)
-    if not os.path.isdir(src_dir):
-        return False
-
-    # Verify the bundle is complete before touching anything
-    for src_name, _ in DGVOODOO_FILES:
-        if not os.path.isfile(os.path.join(src_dir, src_name)):
-            return False
-
-    # Already installed? Check glide2x.dll signature.
-    dst_glide2x = os.path.join(game_dir, 'glide2x.dll')
-    if _is_dgvoodoo_glide(dst_glide2x):
-        # Still copy conf + CPL if missing (user may have removed them)
-        for src_name, dst_name in DGVOODOO_FILES:
-            dst = os.path.join(game_dir, dst_name)
-            if not os.path.isfile(dst):
-                try:
-                    shutil.copy2(os.path.join(src_dir, src_name), dst)
-                except Exception:
-                    pass
-        return True
-
-    # Fresh install — back up any existing glide*.dll (likely nGlide)
-    for glide_name in ('glide.dll', 'glide2x.dll', 'glide3x.dll'):
-        existing = os.path.join(game_dir, glide_name)
-        if os.path.isfile(existing):
-            backup = existing + '.bak_nglide'
-            if not os.path.isfile(backup):
-                try:
-                    shutil.copy2(existing, backup)
-                except Exception:
-                    pass
-
-    # Copy the bundle
-    try:
-        for src_name, dst_name in DGVOODOO_FILES:
-            shutil.copy2(os.path.join(src_dir, src_name),
-                         os.path.join(game_dir, dst_name))
-        return True
-    except Exception:
-        return False
-
-
-def _get_process_path(pid: int) -> Optional[str]:
-    h = None
-    try:
-        import ctypes
-        from ctypes import wintypes
-        h = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
-        if h:
-            buf = ctypes.create_unicode_buffer(1024)
-            size = wintypes.DWORD(1024)
-            if ctypes.windll.kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
-                return buf.value
-    except Exception:
-        pass
-    finally:
-        if h:
-            try:
-                ctypes.windll.kernel32.CloseHandle(h)
-            except Exception:
-                pass
-    return None
 
 
 class Carma2Backend:
@@ -246,7 +32,7 @@ class Carma2Backend:
         self.script: Optional[frida.core.Script] = None
         self.api = None
         self.pid: Optional[int] = None
-        self._cancelled = False   # set by detach() to abort in-flight workers
+        self._cancelled = False
 
         try:
             self.device = frida.get_local_device()
@@ -259,7 +45,6 @@ class Carma2Backend:
         self.game_dir = os.path.dirname(exe_path)
 
     def verify_exe(self) -> bool:
-        """Check that the game EXE matches the known Steam build."""
         if not self.game_exe or not os.path.isfile(self.game_exe):
             return False
         if os.path.getsize(self.game_exe) != KNOWN_EXE_SIZE:
@@ -309,7 +94,6 @@ class Carma2Backend:
         return pid
 
     def _attach(self, pid: int, resume: bool):
-        # Bug 4 fix: clean up any prior session before re-attaching
         self.detach()
         self._cancelled = False
 
@@ -317,8 +101,6 @@ class Carma2Backend:
             src = f.read()
 
         session = self.device.attach(pid)
-        # Bug 3 fix: capture session in closure so the callback only clears
-        # THIS session, not a newer one from a subsequent _attach() call.
         session.on('detached',
                    lambda reason, crash, s=session: self._on_session_detached(reason, crash, s))
 
@@ -342,7 +124,6 @@ class Carma2Backend:
             self.device.resume(pid)
 
     def _on_session_detached(self, reason, crash, detached_session=None):
-        # Bug 3 fix: ignore stale callbacks from old sessions
         if detached_session is not None and detached_session is not self.session:
             return
         try:
@@ -352,10 +133,10 @@ class Carma2Backend:
         self.session = None
         self.script = None
         self.api = None
-        self.pid = None     # Bug 2 fix: clear pid so UI doesn't show stale info
+        self.pid = None
 
     def detach(self):
-        self._cancelled = True  # Bug 7: abort in-flight workers
+        self._cancelled = True
         if self.session is not None:
             try:
                 self.session.detach()
@@ -463,7 +244,6 @@ class Carma2Backend:
         return False
 
     def auto_start_race(self, timeout: float = 60.0) -> bool:
-        """Main -> NewGame -> race. Returns True on success."""
         snap = self.snap()
         if snap is None:
             return False
@@ -494,7 +274,7 @@ class Carma2Backend:
                 return False
             s = self.snap()
             if s is None:
-                return False  # Bug 6 fix: session lost = game died, not success
+                return False
             if s.get('dogame_state', 0) >= 4 or s.get('game_state', 0) != 0:
                 break
             time.sleep(0.2)
@@ -514,10 +294,7 @@ class Carma2Backend:
                     self._on_event(payload)
             elif mtype == 'error':
                 desc = msg.get('description', '')
-                try:
-                    self._on_log(f'[script error] {desc}')
-                except Exception:
-                    pass
+                self._log(f'[script error] {desc}')
         except Exception:
             pass
 

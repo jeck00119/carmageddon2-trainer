@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (QComboBox, QGridLayout, QGroupBox, QHBoxLayout,
                                 QScrollArea, QSpinBox, QVBoxLayout, QWidget)
 
 from backend.dev_actions import Action, DEV_ACTIONS, actions_by_group
+from ui.style import BAD, GOOD, TEXT_DIM
 
 
 class DevTab(QWidget):
@@ -55,7 +56,7 @@ class DevTab(QWidget):
             'Enable Dev Mode first. Some features need in-race state. '
             'Use the search bar to filter.')
         hint.setWordWrap(True)
-        hint.setStyleSheet('color: #9aa0a6; font-style: italic;')
+        hint.setStyleSheet(f'color: {TEXT_DIM}; font-style: italic;')
         layout.addWidget(hint)
 
         # Build each group from the registry
@@ -111,7 +112,7 @@ class DevTab(QWidget):
             h.setSpacing(6)
             h.addWidget(QLabel(action.label + ':'))
             value = QLabel('—')
-            value.setStyleSheet('color: #4ec27a; font-weight: 600;')
+            value.setStyleSheet(f'color: {GOOD}; font-weight: 600;')
             h.addWidget(value)
             h.addStretch()
             self._action_widgets[action.name] = {'value_label': value, 'action': action}
@@ -170,7 +171,7 @@ class DevTab(QWidget):
             if action.tooltip:
                 btn.setToolTip(action.tooltip)
             if action.danger:
-                btn.setStyleSheet('color: #e85050;')
+                btn.setStyleSheet(f'color: {BAD};')
 
             self._action_widgets[action.name] = {'btn': btn, 'action': action}
 
@@ -183,7 +184,7 @@ class DevTab(QWidget):
                 v.addWidget(btn)
                 state_lbl = QLabel('—')
                 state_lbl.setAlignment(Qt.AlignCenter)
-                state_lbl.setStyleSheet('color: #4ec27a; font-size: 9pt;')
+                state_lbl.setStyleSheet(f'color: {GOOD}; font-size: 9pt;')
                 v.addWidget(state_lbl)
                 self._action_widgets[action.name]['state_label'] = state_lbl
                 return holder, 1

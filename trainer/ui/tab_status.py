@@ -2,16 +2,7 @@
 from PySide6.QtWidgets import (QFileDialog, QFormLayout, QGroupBox,
                                 QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
                                 QWidget)
-
-MENU_NAMES = {
-    0x5a80f0: 'Main menu',
-    0x5b39b8: 'Network menu',
-    0x5bf280: 'New Game menu',
-    0x59c828: 'In race (StartGame)',
-    0x632c60: 'Options menu',
-    0x649df0: 'Quit menu',
-    0x5d6410: 'Change Car menu',
-}
+from ui.style import BAD, GOOD, TEXT_DIM, WARN
 
 
 class StatusTab(QWidget):
@@ -42,7 +33,7 @@ class StatusTab(QWidget):
         path_row = QHBoxLayout()
         game_path = self.bridge.game_path or '(not found)'
         self.lbl_path = QLabel(game_path)
-        self.lbl_path.setStyleSheet('color: #9aa0a6; font-size: 9pt;')
+        self.lbl_path.setStyleSheet(f'color: {TEXT_DIM}; font-size: 9pt;')
         self.lbl_path.setWordWrap(True)
         btn_browse = QPushButton('Change...')
         btn_browse.setMaximumWidth(80)
@@ -55,13 +46,13 @@ class StatusTab(QWidget):
         wi = self.bridge.wrapper_info
         if wi.get('type') == 'dgvoodoo':
             wrapper_text = 'dgVoodoo 2 (Alt+Tab / windowed OK)'
-            wrapper_style = 'color: #4ec27a;'
+            wrapper_style = f'color: {GOOD};'
         elif wi.get('ok'):
             wrapper_text = 'Glide wrapper present'
-            wrapper_style = 'color: #e0b341;'
+            wrapper_style = f'color: {WARN};'
         else:
             wrapper_text = 'Not installed'
-            wrapper_style = 'color: #e85050;'
+            wrapper_style = f'color: {BAD};'
         self.lbl_wrapper = QLabel(wrapper_text)
         self.lbl_wrapper.setStyleSheet(f'{wrapper_style} font-size: 9pt;')
         conn.addRow('Wrapper:', self.lbl_wrapper)
@@ -88,11 +79,11 @@ class StatusTab(QWidget):
     def update_snap(self, snap, attached: bool, pid):
         if attached:
             self.lbl_state.setText('Attached')
-            self.lbl_state.setStyleSheet('color: #2a2; font-weight: bold;')
+            self.lbl_state.setStyleSheet(f'color: {GOOD}; font-weight: bold;')
             self.lbl_pid.setText(str(pid) if pid else '—')
         else:
             self.lbl_state.setText('Detached')
-            self.lbl_state.setStyleSheet('color: #c33; font-weight: bold;')
+            self.lbl_state.setStyleSheet(f'color: {BAD}; font-weight: bold;')
             self.lbl_pid.setText('—')
 
     def _reattach(self):

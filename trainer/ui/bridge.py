@@ -13,9 +13,9 @@ from PySide6.QtCore import QObject, QSettings, QThread, Signal
 
 from backend.cheat_db import load_cheat_table, powerups_only
 from backend.dev_actions import find_action
-from backend.frida_core import (
-    Carma2Backend, check_wrapper, ensure_dgvoodoo, find_game,
-)
+from backend.frida_core import Carma2Backend
+from backend.game_detect import find_game
+from backend.dgvoodoo import check_wrapper, ensure_dgvoodoo
 
 DEFAULT_FAVORITES = ['WHIZZ', 'MINGMING', 'WETWET', 'BIGTWAT', 'MOONINGMINNIE']
 

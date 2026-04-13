@@ -2,6 +2,7 @@
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QGridLayout, QLabel, QLineEdit, QMenu,
                                 QPushButton, QScrollArea, QVBoxLayout, QWidget)
+from ui.style import TEXT_DIM
 
 
 class PowerupTab(QWidget):
@@ -31,7 +32,7 @@ class PowerupTab(QWidget):
 
         # Header
         self.header = QLabel(f'{len(self.entries)} powerups  ·  only work in-race')
-        self.header.setStyleSheet('color: #9aa0a6;')
+        self.header.setStyleSheet(f'color: {TEXT_DIM};')
         layout.addWidget(self.header)
 
         # Scrollable grid

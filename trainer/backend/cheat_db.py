@@ -4,14 +4,8 @@ Carma2 cheat table — fully embedded, no binary file needed.
 All 94 entries extracted from CARMA2_HW.EXE at VA 0x590970 (file offset 0x18eb70).
 Joined with KNOWN_CHEATS (94/94 strings) + POWERUP_NAMES for human-readable labels.
 """
-import os
-import sys
 from dataclasses import dataclass
 from typing import Optional
-
-_TOOLS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-if _TOOLS_DIR not in sys.path:
-    sys.path.insert(0, _TOOLS_DIR)
 
 from hash_function import KNOWN_CHEATS
 

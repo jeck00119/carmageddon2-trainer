@@ -2,6 +2,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QGridLayout, QGroupBox, QLabel, QPushButton,
                                 QVBoxLayout, QWidget)
+from ui.style import TEXT_DIM
 
 
 class RaceTab(QWidget):
@@ -78,7 +79,7 @@ class RaceTab(QWidget):
                       'Right-click any powerup in the Powerups tab to pin it here.')
         hint.setWordWrap(True)
         hint.setAlignment(Qt.AlignCenter)
-        hint.setStyleSheet('color: #9aa0a6; font-style: italic;')
+        hint.setStyleSheet(f'color: {TEXT_DIM}; font-style: italic;')
         layout.addWidget(hint)
 
         layout.addStretch()
@@ -133,7 +134,7 @@ class RaceTab(QWidget):
         if not favorites:
             empty = QLabel('No favorites yet — right-click a powerup in the '
                            'Powerups tab to pin it.')
-            empty.setStyleSheet('color: #9aa0a6; font-style: italic;')
+            empty.setStyleSheet(f'color: {TEXT_DIM}; font-style: italic;')
             empty.setAlignment(Qt.AlignCenter)
             self.fav_layout.addWidget(empty, 0, 0, 1, self.FAV_COLUMNS)
             return

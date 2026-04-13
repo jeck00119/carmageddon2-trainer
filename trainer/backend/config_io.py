@@ -66,15 +66,15 @@ def write_dgvoodoo(game_dir: str, changes: dict[str, dict[str, str]]) -> bool:
         return False
 
 
-# Also update the bundled copy so ensure_dgvoodoo doesn't overwrite
+# Also update the bundled copy so ensure_dgvoodoo doesn't overwrite user settings.
+# write_dgvoodoo expects a directory containing dgVoodoo.conf — the bundled
+# conf lives at deps/dgvoodoo/dgVoodoo.conf, so we pass its parent directory.
 def write_dgvoodoo_bundled(trainer_dir: str, changes: dict[str, dict[str, str]]) -> bool:
     """Write same changes to the bundled deps/dgvoodoo/dgVoodoo.conf."""
-    bundled = os.path.join(trainer_dir, 'deps', 'dgvoodoo', 'dgVoodoo.conf')
-    if not os.path.isfile(bundled):
+    bundled_dir = os.path.join(trainer_dir, 'deps', 'dgvoodoo')
+    if not os.path.isfile(os.path.join(bundled_dir, 'dgVoodoo.conf')):
         return False
-    game_dir_fake = os.path.dirname(bundled)
-    # Temporarily copy to match write_dgvoodoo's path expectation
-    return write_dgvoodoo(os.path.dirname(bundled), changes)
+    return write_dgvoodoo(bundled_dir, changes)
 
 
 # ---------------------------------------------------------------------------
