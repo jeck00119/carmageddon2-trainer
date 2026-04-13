@@ -99,29 +99,24 @@ var injectH2            = 0;
 var u32 = Process.findModuleByName('user32.dll');
 
 if (u32) {
-    // ---- Cursor confinement: block ClipCursor(NULL) when game is focused ----
-    // The game repeatedly calls ClipCursor(NULL) which frees the cursor.
-    // We intercept it: when the game window is foreground, replace NULL with
-    // the game's client rect so the cursor stays locked. When unfocused,
-    // let NULL through so the cursor is free. This is instant — no polling gap.
+    // ---- Cursor confinement: lock to WINDOW rect when focused ----
+    // The game calls ClipCursor(NULL) which frees the cursor. We intercept
+    // and replace with the full WINDOW rect (not client rect) so the cursor
+    // can still reach title bar and resize handles but can't escape the window.
+    // When unfocused, NULL passes through and the cursor is free.
     var _GetForegroundWindow = new NativeFunction(u32.getExportByName('GetForegroundWindow'),
         'pointer', [], 'stdcall');
     var _FindWindowA = new NativeFunction(u32.getExportByName('FindWindowA'),
         'pointer', ['pointer', 'pointer'], 'stdcall');
-    var _GetClientRect = new NativeFunction(u32.getExportByName('GetClientRect'),
-        'int', ['pointer', 'pointer'], 'stdcall');
-    var _ClientToScreen = new NativeFunction(u32.getExportByName('ClientToScreen'),
+    var _GetWindowRect = new NativeFunction(u32.getExportByName('GetWindowRect'),
         'int', ['pointer', 'pointer'], 'stdcall');
 
     var _ccGameHwnd = NULL;
     var _ccWndClass = Memory.allocAnsiString('Carma2MainWndClass');
-    var _ccRect = Memory.alloc(16);
-    var _ccPt = Memory.alloc(8);
     var _ccClip = Memory.alloc(16);
 
     Interceptor.attach(u32.getExportByName('ClipCursor'), {
         onEnter: function (args) {
-            // Only intercept ClipCursor(NULL) — that's the game trying to free the cursor
             if (!args[0].isNull()) return;
 
             if (_ccGameHwnd.isNull()) {
@@ -129,21 +124,14 @@ if (u32) {
                 if (_ccGameHwnd.isNull()) return;
             }
             var fg = _GetForegroundWindow();
-            if (!fg.equals(_ccGameHwnd)) return; // unfocused — let NULL through
+            if (!fg.equals(_ccGameHwnd)) return;
 
-            // Focused: replace NULL with game's client rect
-            _GetClientRect(_ccGameHwnd, _ccRect);
-            _ccPt.writeS32(_ccRect.readS32());
-            _ccPt.add(4).writeS32(_ccRect.add(4).readS32());
-            _ClientToScreen(_ccGameHwnd, _ccPt);
-            var l = _ccPt.readS32(), t = _ccPt.add(4).readS32();
-            _ccPt.writeS32(_ccRect.add(8).readS32());
-            _ccPt.add(4).writeS32(_ccRect.add(12).readS32());
-            _ClientToScreen(_ccGameHwnd, _ccPt);
-            _ccClip.writeS32(l);
-            _ccClip.add(4).writeS32(t);
-            _ccClip.add(8).writeS32(_ccPt.readS32());
-            _ccClip.add(12).writeS32(_ccPt.add(4).readS32());
+            // Use full window rect + small margin for corner resize handles
+            _GetWindowRect(_ccGameHwnd, _ccClip);
+            _ccClip.writeS32(_ccClip.readS32() - 8);          // left - 8
+            _ccClip.add(4).writeS32(_ccClip.add(4).readS32() - 8);  // top - 8
+            _ccClip.add(8).writeS32(_ccClip.add(8).readS32() + 8);  // right + 8
+            _ccClip.add(12).writeS32(_ccClip.add(12).readS32() + 8); // bottom + 8
             args[0] = _ccClip;
         }
     });
