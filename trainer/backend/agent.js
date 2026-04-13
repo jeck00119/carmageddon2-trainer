@@ -109,33 +109,71 @@ if (u32) {
     noop('ClipCursor', 1,      ['int',     ['pointer'], 'stdcall']);
     noop('SetCapture', ptr(0), ['pointer', ['pointer'], 'stdcall']);
 
-    // ---- Alt+Tab fix: block DInput's WH_KEYBOARD_LL hook ----
-    // DirectInput installs a low-level keyboard hook that eats system keys
-    // (Alt+Tab, Win) before the Windows shell processes them. We rewrite the
-    // hook type to an invalid value so the real call fails, then fake success
-    // so DInput moves on without knowing the install was suppressed.
-    function hookSetWHE(name) {
-        try {
-            Interceptor.attach(u32.getExportByName(name), {
-                onEnter: function (args) {
-                    if (args[0].toInt32() === 13) { // WH_KEYBOARD_LL
-                        this.blocked = true;
-                        args[0] = ptr(99);
-                    }
-                },
-                onLeave: function (retval) {
-                    if (this.blocked) {
-                        retval.replace(ptr(0xDEADBEEF));
-                        send({h: 'log', msg: 'BLOCKED WH_KEYBOARD_LL install'});
-                    }
-                }
-            });
-        } catch (e) { send({h: 'log', msg: name + ' hook failed: ' + e}); }
-    }
-    // Only hook the A variant. DInput uses SetWindowsHookExA for its LL hook.
-    // Hooking SetWindowsHookExW breaks keyboard input — dgVoodoo/DXGI uses
-    // the W variant internally and Interceptor.attach on it corrupts the call.
-    hookSetWHE('SetWindowsHookExA');
+    // ---- Alt+Tab fix ----
+    // Two parts:
+    //   1. Block DInput's WH_KEYBOARD_LL — it eats system keys (Alt+Tab, Win)
+    //   2. Install our OWN WH_KEYBOARD_LL on a dedicated thread with a
+    //      Win32 message pump — passes all keys through via CallNextHookEx.
+    //      Windows needs a responsive LL hook in the chain to route system
+    //      hotkeys to the shell. Frida's agent thread has no message pump,
+    //      so we create a native thread for it.
+    //
+    // Only hook SetWindowsHookExA (not W). DInput uses the A variant.
+    // Hooking the W variant breaks keyboard — dgVoodoo/DXGI uses it internally.
+
+    var allowNextLL = false;  // flag: let our own LL install through
+
+    Interceptor.attach(u32.getExportByName('SetWindowsHookExA'), {
+        onEnter: function (args) {
+            if (args[0].toInt32() === 13 && !allowNextLL) {
+                this.blocked = true;
+                args[0] = ptr(99);
+            }
+        },
+        onLeave: function (retval) {
+            if (this.blocked) {
+                retval.replace(ptr(0xDEADBEEF));
+                send({h: 'log', msg: 'BLOCKED WH_KEYBOARD_LL install'});
+            }
+        }
+    });
+
+    // Spawn a dedicated thread that installs our LL hook and pumps messages.
+    var _SetWindowsHookExA = new NativeFunction(u32.getExportByName('SetWindowsHookExA'),
+        'pointer', ['int', 'pointer', 'pointer', 'uint32'], 'stdcall');
+    var _CallNextHookEx = new NativeFunction(u32.getExportByName('CallNextHookEx'),
+        'pointer', ['pointer', 'pointer', 'uint32', 'pointer'], 'stdcall');
+    var _GetMessageW = new NativeFunction(u32.getExportByName('GetMessageW'),
+        'int', ['pointer', 'pointer', 'uint32', 'uint32'], 'stdcall');
+    var _TranslateMessage = new NativeFunction(u32.getExportByName('TranslateMessage'),
+        'int', ['pointer'], 'stdcall');
+    var _DispatchMessageW = new NativeFunction(u32.getExportByName('DispatchMessageW'),
+        'pointer', ['pointer'], 'stdcall');
+    var _CreateThread = new NativeFunction(
+        Process.findModuleByName('kernel32.dll').getExportByName('CreateThread'),
+        'pointer', ['pointer', 'uint32', 'pointer', 'pointer', 'uint32', 'pointer'], 'stdcall');
+
+    var ourLLHook = NULL;
+    var llProc = new NativeCallback(function (nCode, wParam, lParam) {
+        return _CallNextHookEx(ourLLHook, ptr(nCode), wParam, lParam);
+    }, 'pointer', ['int', 'pointer', 'pointer'], 'stdcall');
+
+    var hookThreadProc = new NativeCallback(function (param) {
+        allowNextLL = true;
+        ourLLHook = _SetWindowsHookExA(13, llProc, ptr(0), 0);
+        allowNextLL = false;
+        if (!ourLLHook.isNull()) {
+            // Pump messages forever — keeps the hook alive
+            var msg = Memory.alloc(48);
+            while (_GetMessageW(msg, ptr(0), 0, 0) > 0) {
+                _TranslateMessage(msg);
+                _DispatchMessageW(msg);
+            }
+        }
+        return 0;
+    }, 'uint32', ['pointer'], 'stdcall');
+
+    _CreateThread(ptr(0), 0, hookThreadProc, ptr(0), 0, Memory.alloc(4));
 }
 
 // ===========================================================================
