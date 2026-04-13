@@ -21,67 +21,112 @@ class Setting:
     default: str
     group: str
     label: str
+    tip: str = ''       # tooltip
 
 
 SETTINGS = [
     # --- DISPLAY ---
     Setting('FullScreenMode', 'dgv', 'General', 'combo',
             [('Fullscreen', 'true'), ('Windowed', 'false')],
-            'true', 'DISPLAY', 'Display mode'),
+            'true', 'DISPLAY', 'Display mode',
+            'Fullscreen takes over the monitor. Windowed shows a resizable window.\n'
+            'Press Alt+Enter in-game to toggle between them.'),
     Setting('ForceVerticalSync', 'dgv', 'Glide', 'check', [], 'true',
-            'DISPLAY', 'VSync'),
+            'DISPLAY', 'VSync',
+            'Synchronize frame rate with your monitor refresh rate.\n'
+            'Prevents screen tearing but may add slight input lag.'),
     Setting('KeepWindowAspectRatio', 'dgv', 'General', 'check', [], 'true',
-            'DISPLAY', 'Keep aspect ratio'),
+            'DISPLAY', 'Lock window to 4:3',
+            'Keep the window at the game\'s native 4:3 aspect ratio.\n'
+            'Uncheck to allow any window shape (image may stretch).'),
     Setting('FPSLimit', 'dgv', 'GeneralExt', 'spin', [], '0',
-            'DISPLAY', 'FPS limit (0 = unlimited)'),
+            'DISPLAY', 'FPS limit',
+            'Cap the frame rate. 0 = unlimited.\n'
+            'Useful if the game runs too fast on modern hardware.'),
 
     # --- GRAPHICS QUALITY ---
     Setting('Resolution', 'dgv', 'Glide', 'combo',
-            [('Game default (640x480)', 'unforced'), ('Max (native)', 'max'),
-             ('Max integer scale', 'max_isf'), ('Max 1080p', 'max_fhd'),
-             ('Max 1440p', 'max_qhd'), ('2x', '2x'), ('4x', '4x')],
-            'max', 'GRAPHICS QUALITY', 'Resolution'),
+            [('Original (640x480)', 'unforced'),
+             ('Your monitor (best)', 'max'),
+             ('Pixel-perfect scaling', 'max_isf'),
+             ('Up to 1080p', 'max_fhd'),
+             ('Up to 1440p', 'max_qhd'),
+             ('2x (1280x960)', '2x'),
+             ('4x (2560x1920)', '4x')],
+            'max', 'GRAPHICS QUALITY', 'Render resolution',
+            'How many pixels the game renders internally.\n'
+            '"Your monitor" = sharpest. "Original" = authentic 1998 look.\n'
+            'Higher values look better but use more GPU power.'),
     Setting('Antialiasing', 'dgv', 'Glide', 'combo',
-            [('Off', 'off'), ('App driven', 'appdriven'),
-             ('2x', '2x'), ('4x', '4x'), ('8x', '8x'), ('16x', '16x')],
-            '4x', 'GRAPHICS QUALITY', 'Antialiasing'),
+            [('Off', 'off'), ('Let game decide', 'appdriven'),
+             ('2x (subtle)', '2x'), ('4x (recommended)', '4x'),
+             ('8x (heavy)', '8x'), ('16x (maximum)', '16x')],
+            '4x', 'GRAPHICS QUALITY', 'Edge smoothing',
+            'Smooths jagged edges on 3D objects.\n'
+            'Higher = smoother but heavier on GPU. 4x is a good balance.\n'
+            'If you see visual glitches, try lowering or turning off.'),
     Setting('TMUFiltering', 'dgv', 'Glide', 'combo',
-            [('App driven', 'appdriven'), ('Point sampled (retro)', 'pointsampled'),
-             ('Bilinear (smooth)', 'bilinear')],
-            'bilinear', 'GRAPHICS QUALITY', 'Texture filtering'),
+            [('Let game decide', 'appdriven'),
+             ('Sharp pixels (retro look)', 'pointsampled'),
+             ('Smooth (modern look)', 'bilinear')],
+            'bilinear', 'GRAPHICS QUALITY', 'Texture smoothing',
+            'How textures look when viewed at an angle or up close.\n'
+            '"Sharp pixels" = blocky/retro. "Smooth" = blended/modern.'),
     Setting('Resampling', 'dgv', 'GeneralExt', 'combo',
-            [('Point sampled', 'pointsampled'), ('Bilinear', 'bilinear'),
-             ('Bicubic', 'bicubic'), ('Lanczos-2', 'lanczos-2'),
+            [('Nearest (blocky)', 'pointsampled'),
+             ('Bilinear (soft)', 'bilinear'),
+             ('Bicubic (balanced)', 'bicubic'),
+             ('Lanczos-2 (sharp)', 'lanczos-2'),
              ('Lanczos-3 (sharpest)', 'lanczos-3')],
-            'lanczos-2', 'GRAPHICS QUALITY', 'Upscale filter'),
+            'lanczos-2', 'GRAPHICS QUALITY', 'Upscale filter',
+            'How the game image is scaled up to your screen.\n'
+            'Only matters if render resolution differs from your monitor.\n'
+            'Lanczos-2 is recommended for the best sharpness.'),
 
     # --- GAME WORLD ---
     Setting('Yon', 'opt', '', 'slider', [], '100.000000',
-            'GAME WORLD', 'Draw distance'),
+            'GAME WORLD', 'Draw distance',
+            'How far you can see in the game world.\n'
+            'Higher = see further, but values above 50 may cause AI to behave oddly.'),
     Setting('RoadTexturingLevel', 'opt', '', 'combo',
-            [('Off', '0'), ('Linear mapping', '1')],
-            '1', 'GAME WORLD', 'Road textures'),
+            [('Off (solid color)', '0'), ('On', '1')],
+            '1', 'GAME WORLD', 'Road textures',
+            'Show texture detail on road surfaces.'),
     Setting('WallTexturingLevel', 'opt', '', 'combo',
-            [('Off', '0'), ('Linear', '1'), ('Perspective-correct', '2')],
-            '2', 'GAME WORLD', 'Wall textures'),
+            [('Off (solid color)', '0'), ('Basic', '1'), ('Best', '2')],
+            '2', 'GAME WORLD', 'Wall textures',
+            'Texture quality on walls and buildings.\n'
+            '"Best" uses perspective-correct mapping for less warping.'),
     Setting('CarTexturingLevel', 'opt', '', 'combo',
-            [('Off', '0'), ('Linear', '1'), ('Perspective-correct', '2')],
-            '2', 'GAME WORLD', 'Car textures'),
+            [('Off (solid color)', '0'), ('Basic', '1'), ('Best', '2')],
+            '2', 'GAME WORLD', 'Car textures',
+            'Texture quality on vehicles.\n'
+            '"Best" uses perspective-correct mapping.'),
     Setting('ShadowLevel', 'opt', '', 'combo',
-            [('Off', '0'), ('Cars only', '1'), ('Full (cars + peds + accessories)', '3')],
-            '3', 'GAME WORLD', 'Shadows'),
+            [('None', '0'), ('Cars only', '1'),
+             ('Everything (cars + peds + props)', '3')],
+            '3', 'GAME WORLD', 'Shadows',
+            'Which objects cast shadows on the ground.'),
     Setting('SmokeOn', 'opt', '', 'check', [], '1',
-            'GAME WORLD', 'Smoke effects'),
+            'GAME WORLD', 'Smoke & particles',
+            'Show tire smoke, exhaust, and explosion particles.'),
     Setting('AccessoryRendering', 'opt', '', 'check', [], '1',
-            'GAME WORLD', 'Accessories'),
+            'GAME WORLD', 'Props & scenery objects',
+            'Show destructible props like signs, fences, and cones.\n'
+            'Also affects collision with these objects.'),
     Setting('SkyTextureOn', 'opt', '', 'check', [], '1',
-            'GAME WORLD', 'Sky texture'),
+            'GAME WORLD', 'Sky',
+            'Show the sky texture. Off = solid color background.'),
     Setting('DepthCueingOn', 'opt', '', 'check', [], '1',
-            'GAME WORLD', 'Depth cueing (fog)'),
+            'GAME WORLD', 'Distance fog',
+            'Fade distant objects into the background.\n'
+            'Hides pop-in at the draw distance limit.'),
     Setting('AnimalsOn', 'opt', '', 'check', [], '1',
-            'GAME WORLD', 'Animals'),
+            'GAME WORLD', 'Animals',
+            'Show animals in the game world (cows, dogs, etc).'),
     Setting('DronesOn', 'opt', '', 'check', [], '1',
-            'GAME WORLD', 'Drones (traffic)'),
+            'GAME WORLD', 'Civilian traffic',
+            'Show civilian drone cars driving around the level.'),
 ]
 
 
@@ -145,10 +190,14 @@ class SettingsTab(QWidget):
             w = QComboBox()
             for display, _ in s.options:
                 w.addItem(display)
+            if s.tip:
+                w.setToolTip(s.tip)
             self.widgets[s.key] = w
             form.addRow(s.label + ':', w)
         elif s.widget == 'check':
             w = QCheckBox()
+            if s.tip:
+                w.setToolTip(s.tip)
             self.widgets[s.key] = w
             form.addRow(s.label + ':', w)
         elif s.widget == 'slider':
@@ -167,6 +216,8 @@ class SettingsTab(QWidget):
             note = QLabel('(>50 may affect AI)')
             note.setStyleSheet('color: #888; font-size: 8pt;')
             row.addWidget(note)
+            if s.tip:
+                w.setToolTip(s.tip)
             self.widgets[s.key] = w
             form.addRow(s.label + ':', row)
         elif s.widget == 'spin':
@@ -174,6 +225,8 @@ class SettingsTab(QWidget):
             w.setMinimum(0)
             w.setMaximum(240)
             w.setSpecialValueText('Unlimited')
+            if s.tip:
+                w.setToolTip(s.tip)
             self.widgets[s.key] = w
             form.addRow(s.label + ':', w)
 
