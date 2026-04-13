@@ -136,6 +136,53 @@ if (u32) {
         }
     });
 
+    // ---- Auto-maximize windowed mode ----
+    // dgVoodoo repeatedly calls SetWindowPos to force a 4:3 window size.
+    // We intercept it: when the game is in windowed mode (has WS_CAPTION),
+    // we add SWP_NOSIZE|SWP_NOMOVE flags so dgVoodoo can't resize/move
+    // the window. Then we maximize it once via ShowWindow(SW_MAXIMIZE).
+    var _GetWindowLongA = new NativeFunction(u32.getExportByName('GetWindowLongA'),
+        'int32', ['pointer', 'int'], 'stdcall');
+    var _ShowWindow = new NativeFunction(u32.getExportByName('ShowWindow'),
+        'int', ['pointer', 'int'], 'stdcall');
+
+    var WS_CAPTION = 0x00C00000;
+    var SWP_NOSIZE = 0x0001;
+    var SWP_NOMOVE = 0x0002;
+    var _maximized = false;
+
+    Interceptor.attach(u32.getExportByName('SetWindowPos'), {
+        onEnter: function (args) {
+            if (_ccGameHwnd.isNull()) {
+                _ccGameHwnd = _FindWindowA(_ccWndClass, ptr(0));
+            }
+            if (_ccGameHwnd.isNull() || !args[0].equals(_ccGameHwnd)) return;
+
+            var style = _GetWindowLongA(_ccGameHwnd, -16) >>> 0;
+            if ((style & WS_CAPTION) !== WS_CAPTION) {
+                // Fullscreen — let everything through, reset maximize flag
+                _maximized = false;
+                return;
+            }
+
+            // Windowed — check if caller is glide2x.DLL
+            var caller = this.returnAddress;
+            var mod = null;
+            try { mod = Process.findModuleByAddress(caller); } catch (e) {}
+            if (mod && mod.name.toLowerCase() === 'glide2x.dll') {
+                // Block dgVoodoo's forced resize — add NOSIZE + NOMOVE
+                var flags = args[6].toUInt32();
+                args[6] = ptr(flags | SWP_NOSIZE | SWP_NOMOVE);
+
+                // Maximize once
+                if (!_maximized) {
+                    _maximized = true;
+                    _ShowWindow(_ccGameHwnd, 3); // SW_MAXIMIZE
+                }
+            }
+        }
+    });
+
     // ---- Alt+Tab fix ----
     // Two parts:
     //   1. Block DInput's WH_KEYBOARD_LL — it eats system keys (Alt+Tab, Win)
