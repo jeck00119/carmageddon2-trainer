@@ -37,7 +37,7 @@ SETTINGS = [
             'Synchronize frame rate with your monitor refresh rate.\n'
             'Prevents screen tearing but may add slight input lag.'),
     Setting('KeepWindowAspectRatio', 'dgv', 'General', 'check', [], 'true',
-            'DISPLAY', 'Lock window to 4:3',
+            'DISPLAY', 'Keep aspect ratio',
             'Keep the window at the game\'s native 4:3 aspect ratio.\n'
             'Uncheck to allow any window shape (image may stretch).'),
     Setting('FPSLimit', 'dgv', 'GeneralExt', 'spin', [], '0',
@@ -47,42 +47,43 @@ SETTINGS = [
 
     # --- GRAPHICS QUALITY ---
     Setting('Resolution', 'dgv', 'Glide', 'combo',
-            [('Original (640x480)', 'unforced'),
-             ('Your monitor (best)', 'max'),
-             ('Pixel-perfect scaling', 'max_isf'),
-             ('Up to 1080p', 'max_fhd'),
-             ('Up to 1440p', 'max_qhd'),
+            [('Native (640x480)', 'unforced'),
+             ('Monitor resolution', 'max'),
+             ('2x integer scale', 'max_isf'),
+             ('1080p max', 'max_fhd'),
+             ('1440p max', 'max_qhd'),
              ('2x (1280x960)', '2x'),
              ('4x (2560x1920)', '4x')],
             'max', 'GRAPHICS QUALITY', 'Render resolution',
-            'How many pixels the game renders internally.\n'
-            '"Your monitor" = sharpest. "Original" = authentic 1998 look.\n'
-            'Higher values look better but use more GPU power.'),
+            'Internal rendering resolution.\n'
+            '"Monitor resolution" = sharpest, uses your display\'s native pixels.\n'
+            '"Native" = original 640x480 for an authentic 1998 look.'),
     Setting('Antialiasing', 'dgv', 'Glide', 'combo',
-            [('Off', 'off'), ('Let game decide', 'appdriven'),
-             ('2x (subtle)', '2x'), ('4x (recommended)', '4x'),
-             ('8x (heavy)', '8x'), ('16x (maximum)', '16x')],
-            '4x', 'GRAPHICS QUALITY', 'Edge smoothing',
-            'Smooths jagged edges on 3D objects.\n'
-            'Higher = smoother but heavier on GPU. 4x is a good balance.\n'
-            'If you see visual glitches, try lowering or turning off.'),
+            [('Off', 'off'),
+             ('2x MSAA', '2x'), ('4x MSAA', '4x'),
+             ('8x MSAA', '8x'), ('16x MSAA', '16x')],
+            '4x', 'GRAPHICS QUALITY', 'Antialiasing',
+            'Multisample anti-aliasing — smooths jagged edges on 3D geometry.\n'
+            '4x is a good balance of quality and performance.\n'
+            'If you see rendering artifacts, try lowering or turning off.'),
     Setting('TMUFiltering', 'dgv', 'Glide', 'combo',
-            [('Let game decide', 'appdriven'),
-             ('Sharp pixels (retro look)', 'pointsampled'),
-             ('Smooth (modern look)', 'bilinear')],
-            'bilinear', 'GRAPHICS QUALITY', 'Texture smoothing',
-            'How textures look when viewed at an angle or up close.\n'
-            '"Sharp pixels" = blocky/retro. "Smooth" = blended/modern.'),
+            [('Default', 'appdriven'),
+             ('Point (sharp pixels)', 'pointsampled'),
+             ('Bilinear (smooth)', 'bilinear')],
+            'bilinear', 'GRAPHICS QUALITY', 'Texture filtering',
+            'How textures are sampled when viewed at an angle.\n'
+            '"Default" = the game\'s original filtering.\n'
+            '"Point" = sharp/blocky pixels. "Bilinear" = smooth blending.'),
     Setting('Resampling', 'dgv', 'GeneralExt', 'combo',
-            [('Nearest (blocky)', 'pointsampled'),
-             ('Bilinear (soft)', 'bilinear'),
-             ('Bicubic (balanced)', 'bicubic'),
-             ('Lanczos-2 (sharp)', 'lanczos-2'),
-             ('Lanczos-3 (sharpest)', 'lanczos-3')],
+            [('Nearest', 'pointsampled'),
+             ('Bilinear', 'bilinear'),
+             ('Bicubic', 'bicubic'),
+             ('Lanczos-2 (recommended)', 'lanczos-2'),
+             ('Lanczos-3', 'lanczos-3')],
             'lanczos-2', 'GRAPHICS QUALITY', 'Upscale filter',
-            'How the game image is scaled up to your screen.\n'
-            'Only matters if render resolution differs from your monitor.\n'
-            'Lanczos-2 is recommended for the best sharpness.'),
+            'Filter used to scale the rendered image to your screen.\n'
+            'Only relevant when render resolution differs from your monitor.\n'
+            'Lanczos-2 gives the best sharpness for most setups.'),
 
     # --- GAME WORLD ---
     Setting('Yon', 'opt', '', 'slider', [], '100.000000',
@@ -90,19 +91,20 @@ SETTINGS = [
             'How far you can see in the game world.\n'
             'Higher = see further, but values above 50 may cause AI to behave oddly.'),
     Setting('RoadTexturingLevel', 'opt', '', 'combo',
-            [('Off (solid color)', '0'), ('On', '1')],
+            [('Off', '0'), ('On', '1')],
             '1', 'GAME WORLD', 'Road textures',
-            'Show texture detail on road surfaces.'),
+            'Texture mapping on road surfaces.\n'
+            'Off = solid color only.'),
     Setting('WallTexturingLevel', 'opt', '', 'combo',
-            [('Off (solid color)', '0'), ('Basic', '1'), ('Best', '2')],
+            [('Off', '0'), ('Linear', '1'), ('Perspective-correct', '2')],
             '2', 'GAME WORLD', 'Wall textures',
-            'Texture quality on walls and buildings.\n'
-            '"Best" uses perspective-correct mapping for less warping.'),
+            'Texture mapping on walls and buildings.\n'
+            '"Perspective-correct" reduces texture warping at angles.'),
     Setting('CarTexturingLevel', 'opt', '', 'combo',
-            [('Off (solid color)', '0'), ('Basic', '1'), ('Best', '2')],
+            [('Off', '0'), ('Linear', '1'), ('Perspective-correct', '2')],
             '2', 'GAME WORLD', 'Car textures',
-            'Texture quality on vehicles.\n'
-            '"Best" uses perspective-correct mapping.'),
+            'Texture mapping on vehicles.\n'
+            '"Perspective-correct" reduces warping on angled surfaces.'),
     Setting('ShadowLevel', 'opt', '', 'combo',
             [('None', '0'), ('Cars only', '1'),
              ('Everything (cars + peds + props)', '3')],
