@@ -99,15 +99,54 @@ var injectH2            = 0;
 var u32 = Process.findModuleByName('user32.dll');
 
 if (u32) {
-    // ---- Cursor release: stop the game from locking/capturing the cursor ----
-    function noop(name, ret, sig) {
-        try {
-            Interceptor.replace(u32.getExportByName(name),
-                new NativeCallback(function () { return ret; }, sig[0], sig[1], sig[2]));
-        } catch (e) {}
-    }
-    noop('ClipCursor', 1,      ['int',     ['pointer'], 'stdcall']);
-    noop('SetCapture', ptr(0), ['pointer', ['pointer'], 'stdcall']);
+    // ---- Cursor confinement: block ClipCursor(NULL) when game is focused ----
+    // The game repeatedly calls ClipCursor(NULL) which frees the cursor.
+    // We intercept it: when the game window is foreground, replace NULL with
+    // the game's client rect so the cursor stays locked. When unfocused,
+    // let NULL through so the cursor is free. This is instant — no polling gap.
+    var _GetForegroundWindow = new NativeFunction(u32.getExportByName('GetForegroundWindow'),
+        'pointer', [], 'stdcall');
+    var _FindWindowA = new NativeFunction(u32.getExportByName('FindWindowA'),
+        'pointer', ['pointer', 'pointer'], 'stdcall');
+    var _GetClientRect = new NativeFunction(u32.getExportByName('GetClientRect'),
+        'int', ['pointer', 'pointer'], 'stdcall');
+    var _ClientToScreen = new NativeFunction(u32.getExportByName('ClientToScreen'),
+        'int', ['pointer', 'pointer'], 'stdcall');
+
+    var _ccGameHwnd = NULL;
+    var _ccWndClass = Memory.allocAnsiString('Carma2MainWndClass');
+    var _ccRect = Memory.alloc(16);
+    var _ccPt = Memory.alloc(8);
+    var _ccClip = Memory.alloc(16);
+
+    Interceptor.attach(u32.getExportByName('ClipCursor'), {
+        onEnter: function (args) {
+            // Only intercept ClipCursor(NULL) — that's the game trying to free the cursor
+            if (!args[0].isNull()) return;
+
+            if (_ccGameHwnd.isNull()) {
+                _ccGameHwnd = _FindWindowA(_ccWndClass, ptr(0));
+                if (_ccGameHwnd.isNull()) return;
+            }
+            var fg = _GetForegroundWindow();
+            if (!fg.equals(_ccGameHwnd)) return; // unfocused — let NULL through
+
+            // Focused: replace NULL with game's client rect
+            _GetClientRect(_ccGameHwnd, _ccRect);
+            _ccPt.writeS32(_ccRect.readS32());
+            _ccPt.add(4).writeS32(_ccRect.add(4).readS32());
+            _ClientToScreen(_ccGameHwnd, _ccPt);
+            var l = _ccPt.readS32(), t = _ccPt.add(4).readS32();
+            _ccPt.writeS32(_ccRect.add(8).readS32());
+            _ccPt.add(4).writeS32(_ccRect.add(12).readS32());
+            _ClientToScreen(_ccGameHwnd, _ccPt);
+            _ccClip.writeS32(l);
+            _ccClip.add(4).writeS32(t);
+            _ccClip.add(8).writeS32(_ccPt.readS32());
+            _ccClip.add(12).writeS32(_ccPt.add(4).readS32());
+            args[0] = _ccClip;
+        }
+    });
 
     // ---- Alt+Tab fix ----
     // Two parts:
@@ -162,13 +201,11 @@ if (u32) {
         allowNextLL = true;
         ourLLHook = _SetWindowsHookExA(13, llProc, ptr(0), 0);
         allowNextLL = false;
-        if (!ourLLHook.isNull()) {
-            // Pump messages forever — keeps the hook alive
-            var msg = Memory.alloc(48);
-            while (_GetMessageW(msg, ptr(0), 0, 0) > 0) {
-                _TranslateMessage(msg);
-                _DispatchMessageW(msg);
-            }
+        // Pump messages forever — keeps the LL hook alive
+        var msg = Memory.alloc(48);
+        while (_GetMessageW(msg, ptr(0), 0, 0) > 0) {
+            _TranslateMessage(msg);
+            _DispatchMessageW(msg);
         }
         return 0;
     }, 'uint32', ['pointer'], 'stdcall');
