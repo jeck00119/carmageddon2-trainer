@@ -49,8 +49,9 @@ and apply runtime hooks — no files are modified on disk.
 | Tab | What's in it |
 |-----|-------------|
 | **Race** | Auto-start race, finish race, enable cheat mode, fly mode, pinned favorites |
-| **Dev cheats** | 21 buttons across 9 groups with live state display. Enable Dev Mode first. |
+| **Dev cheats** | 26 buttons across 10 groups with live state display. Enable Dev Mode first. |
 | **Powerups** | Grid of all 89 powerups with search. Right-click to pin/unpin. |
+| **Game Settings** | 31 configurable options across 4 groups (Display, Graphics, Gameplay, Audio). Writes to dgVoodoo.conf + OPTIONS.TXT. Changes take effect on next launch. |
 | **Status** | Connection info, game path, graphics wrapper status, force reattach |
 
 ## Credits
