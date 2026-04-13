@@ -173,6 +173,26 @@ DEV_ACTIONS = [
     Action('simple_toggle', 'Force race end', group='utility',
            tooltip='Sets [0x74d1a0]=1. Forces you out of the race back '
                    'to the main menu without finishing. Quick escape cheat.'),
+
+    # --- TEST FEATURES (cut from retail — experimental, may be unstable) ---
+    Action('spectator_toggle', 'Spectator camera', group='test features',
+           requires='in_race',
+           tooltip='Toggle spectator mode — watch an opponent instead of your car.\n'
+                   'Cut feature from the retail binary. Use Next/Prev to cycle opponents.\n'
+                   'Toggle again to return to your car.'),
+    Action('spectator_next', 'Next opponent', group='test features',
+           requires='in_race',
+           tooltip='Switch to the next opponent in spectator mode.'),
+    Action('spectator_prev', 'Prev opponent', group='test features',
+           requires='in_race',
+           tooltip='Switch to the previous opponent in spectator mode.'),
+    Action('lockon_target', 'Lock-on target', group='test features',
+           requires='in_race',
+           tooltip='Lock camera onto the nearest opponent.\n'
+                   'Your car keeps driving — the camera just follows the target.'),
+    Action('lockon_cycle', 'Cycle lock-on', group='test features',
+           requires='in_race',
+           tooltip='Switch lock-on to the next opponent.'),
 ]
 
 
@@ -187,6 +207,7 @@ GROUP_ORDER = [
     'display',
     'main menu',
     'utility',
+    'test features',
 ]
 
 

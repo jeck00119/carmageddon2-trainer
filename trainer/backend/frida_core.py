@@ -206,6 +206,13 @@ class Carma2Backend:
 
     def simple_toggle(self) -> str: return self._rpc('simple_toggle')
 
+    # Camera / spectator (experimental — cut features from retail binary)
+    def spectator_toggle(self) -> str: return self._rpc('spectator_toggle')
+    def spectator_next(self) -> str: return self._rpc('spectator_next')
+    def spectator_prev(self) -> str: return self._rpc('spectator_prev')
+    def lockon_target(self) -> str: return self._rpc('lockon_target')
+    def lockon_cycle(self) -> str: return self._rpc('lockon_cycle')
+
     # ----- high-level macros -----
 
     def _wait_for(self, predicate, timeout: float, poll: float = 0.1) -> bool:

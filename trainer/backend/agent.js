@@ -84,6 +84,15 @@ var DEV = {
     FN_HUD_CYCLE:         0x444f40, // F12 (HUD_MODE cycler 0..5)
     FN_SIMPLE_TOGGLE:     0x441490, // '8' — force race end
     FN_GONAD_OF_DEATH:    0x444f10,
+
+    // Camera / spectator system (cut from retail, still functional in binary)
+    SPECTATOR_FLAG:       0x6a0940,  // 0=off, 1=spectating opponent
+    SPECTATOR_OPP_IDX:    0x6a0a58,  // index of opponent being watched
+    FN_SPECTATOR_TOGGLE:  0x4da9d0,  // Tab — toggle spectator camera on/off
+    FN_SPECTATOR_NEXT:    0x4dab80,  // [ — next opponent in spectator
+    FN_SPECTATOR_PREV:    0x4daa00,  // ] — previous opponent in spectator
+    FN_LOCKON_TARGET:     0x4945f0,  // Q — lock camera on nearest opponent
+    FN_LOCKON_CYCLE:      0x494700,  // W — cycle lock-on to next opponent
 };
 
 // ===========================================================================
@@ -399,6 +408,9 @@ rpc.exports = {
             damage_state: rd32(DEV.DAMAGE_STATE),
             hud_mode:     rd32(DEV.HUD_MODE),
             gravity:      rd32(DEV.GRAVITY),
+            // Camera / spectator state
+            spectating:   rd32(DEV.SPECTATOR_FLAG),
+            spectator_opp: rd32(DEV.SPECTATOR_OPP_IDX),
         };
     },
     clickSel: function (sel) { return click(sel); },
@@ -481,6 +493,13 @@ rpc.exports = {
         }
         return 'all 9 camera modes enabled';
     },
+
+    // Camera / spectator (cut features — still functional in binary, need testing)
+    spectatorToggle:  function () { return callDev(DEV.FN_SPECTATOR_TOGGLE); },
+    spectatorNext:    function () { return callDev(DEV.FN_SPECTATOR_NEXT); },
+    spectatorPrev:    function () { return callDev(DEV.FN_SPECTATOR_PREV); },
+    lockonTarget:     function () { return callDev(DEV.FN_LOCKON_TARGET); },
+    lockonCycle:      function () { return callDev(DEV.FN_LOCKON_CYCLE); },
 
     // Hidden cheat (only fires from MENU — the check is in the menu update fn)
     // MWUCUZYSFUYHTQWXEPVU — unlocks all cars and races
