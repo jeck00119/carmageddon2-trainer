@@ -236,4 +236,107 @@ QStatusBar {{
 QStatusBar::item {{
     border: none;
 }}
+
+/* ---------- Combo boxes ---------- */
+QComboBox {{
+    background: {BG};
+    border: 1px solid {BORDER};
+    border-radius: 6px;
+    padding: 6px 12px;
+    min-width: 140px;
+}}
+
+QComboBox:hover {{
+    border-color: {ACCENT};
+}}
+
+QComboBox::drop-down {{
+    border: none;
+    width: 24px;
+}}
+
+QComboBox::down-arrow {{
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid {TEXT_DIM};
+    margin-right: 8px;
+}}
+
+QComboBox QAbstractItemView {{
+    background: {BG_ELEV};
+    border: 1px solid {BORDER};
+    selection-background-color: {ACCENT};
+    selection-color: white;
+    outline: none;
+}}
+
+/* ---------- Checkboxes ---------- */
+QCheckBox {{
+    spacing: 8px;
+}}
+
+QCheckBox::indicator {{
+    width: 18px;
+    height: 18px;
+    border: 2px solid {BORDER};
+    border-radius: 4px;
+    background: {BG};
+}}
+
+QCheckBox::indicator:hover {{
+    border-color: {ACCENT};
+}}
+
+QCheckBox::indicator:checked {{
+    background: {ACCENT};
+    border-color: {ACCENT};
+}}
+
+/* ---------- Spin boxes ---------- */
+QSpinBox {{
+    background: {BG};
+    border: 1px solid {BORDER};
+    border-radius: 6px;
+    padding: 6px 8px;
+    min-width: 80px;
+}}
+
+QSpinBox:focus {{
+    border-color: {ACCENT};
+}}
+
+QSpinBox::up-button, QSpinBox::down-button {{
+    background: {BG_ELEV};
+    border: none;
+    width: 20px;
+}}
+
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
+    background: #444850;
+}}
+
+/* ---------- Sliders ---------- */
+QSlider::groove:horizontal {{
+    background: {BG_ELEV};
+    height: 6px;
+    border-radius: 3px;
+}}
+
+QSlider::handle:horizontal {{
+    background: {ACCENT};
+    width: 16px;
+    height: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+}}
+
+QSlider::handle:horizontal:hover {{
+    background: {ACCENT_HOV};
+}}
+
+QSlider::sub-page:horizontal {{
+    background: {ACCENT};
+    border-radius: 3px;
+}}
 """

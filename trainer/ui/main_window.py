@@ -12,6 +12,7 @@ from ui.bridge import BackendBridge
 from ui.tab_dev import DevTab
 from ui.tab_powerups import PowerupTab
 from ui.tab_race import RaceTab
+from ui.tab_settings import SettingsTab
 from ui.tab_status import MENU_NAMES, StatusTab
 
 
@@ -63,6 +64,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(RaceTab(self.bridge), 'Race')
         self.tabs.addTab(DevTab(self.bridge), 'Dev cheats')
         self.tabs.addTab(PowerupTab(self.bridge), 'Powerups')
+        self.tabs.addTab(SettingsTab(self.bridge), 'Game Settings')
         self.tabs.addTab(self.tab_status, 'Status')
 
         # --- Layout ---
