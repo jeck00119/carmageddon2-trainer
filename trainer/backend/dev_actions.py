@@ -174,25 +174,31 @@ DEV_ACTIONS = [
            tooltip='Sets [0x74d1a0]=1. Forces you out of the race back '
                    'to the main menu without finishing. Quick escape cheat.'),
 
-    # --- TEST FEATURES (cut from retail — experimental, may be unstable) ---
-    Action('spectator_toggle', 'Spectator camera', group='test features',
+    # --- TEST FEATURES (cut from retail — non-functional, kept for RE reference) ---
+    # The spectator/lock-on system was cut from the retail build. The functions
+    # exist but crash because opponent car structs lack required camera fields
+    # (NULL function pointer at +0x40). The Carmashit article confirms the
+    # Opponents edit mode is "very crashy." These remain here for future RE work.
+    Action('spectator_toggle', 'Spectator camera [CRASHES]', group='test features',
            requires='in_race',
-           tooltip='Toggle spectator mode — watch an opponent instead of your car.\n'
-                   'Cut feature from the retail binary. Use Next/Prev to cycle opponents.\n'
-                   'Toggle again to return to your car.'),
-    Action('spectator_next', 'Next opponent', group='test features',
+           tooltip='KNOWN CRASH — cut feature from retail binary.\n'
+                   'Toggles spectator flag at [0x6a0940] but the camera\n'
+                   'positioning code dereferences NULL, crashing the game.\n'
+                   'Requires opponent tracking infrastructure that was never\n'
+                   'completed in the shipped build.'),
+    Action('spectator_next', 'Next opponent [CRASHES]', group='test features',
            requires='in_race',
-           tooltip='Switch to the next opponent in spectator mode.'),
-    Action('spectator_prev', 'Prev opponent', group='test features',
+           tooltip='KNOWN CRASH — requires populated opponent tracking array.'),
+    Action('spectator_prev', 'Prev opponent [CRASHES]', group='test features',
            requires='in_race',
-           tooltip='Switch to the previous opponent in spectator mode.'),
-    Action('lockon_target', 'Lock-on target', group='test features',
+           tooltip='KNOWN CRASH — requires populated opponent tracking array.'),
+    Action('lockon_target', 'Lock-on target [CRASHES]', group='test features',
            requires='in_race',
-           tooltip='Lock camera onto the nearest opponent.\n'
-                   'Your car keeps driving — the camera just follows the target.'),
-    Action('lockon_cycle', 'Cycle lock-on', group='test features',
+           tooltip='KNOWN CRASH — accesses opponent data that is not\n'
+                   'properly initialized in the retail binary.'),
+    Action('lockon_cycle', 'Cycle lock-on [CRASHES]', group='test features',
            requires='in_race',
-           tooltip='Switch lock-on to the next opponent.'),
+           tooltip='KNOWN CRASH — same issue as lock-on target.'),
 ]
 
 
